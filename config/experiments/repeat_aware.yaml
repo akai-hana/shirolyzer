@@ -16,8 +16,8 @@
 # Physical key order is defined by the geometry file.
 
 # Search effort defaults live in src/generate.rs: 28 random runs, 100000
-# anneal iterations, and 8 ILS rounds.  They were calibrated in
-# layouts/calibration/REPORT.md; override per run with --runs/--iters/--ils.
+# anneal iterations, and 8 ILS rounds.  They were calibrated during
+# development; override per run with --runs/--iters/--ils.
 # --time-budget stays optional because short budgets truncate seeds and ILS.
 # Diversity output also lives in src/generate.rs: 0.002 primary tolerance,
 # 0.005 secondary tolerance, 4 key positions minimum distance, 8 valid layouts.
@@ -26,6 +26,7 @@
 # Searches start from random layouts only; add known layouts with
 # --seed-layout, --seed-reference NAME or --seed-all-references.
 general:
+  # Relative paths are resolved from the config/ directory.
   geometry: geometry/ansi.yaml
   # Fingering mode: "flexible" lets the model choose any reachable finger for
   # each ngram (subject to alt_fingers); "fixed" always uses the fingermap

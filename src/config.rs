@@ -1,6 +1,6 @@
 //! Load, validate, and expose the user-facing YAML configuration.
 //!
-//! Port of `shirolyzer/utils/config.py`.
+//! Port of `utils/config.py`.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1605,7 +1605,7 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
         if p.is_absolute() {
             p
         } else {
-            paths::repo_root().join("shirolyzer").join(p)
+            paths::config_dir().join(p)
         }
     };
     if !geometry.is_file() {

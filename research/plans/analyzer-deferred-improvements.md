@@ -164,7 +164,7 @@ Branch: `analyzer/report-extras`.
 - [ ] `just build`
 - [ ] `just test`
 - [ ] `just check`
-- [ ] `cargo test --manifest-path shirolyzer/Cargo.toml --release -- --ignored`
+- [ ] `cargo test --release -- --ignored`
 - [ ] `just dev-tools`
 - [ ] Reference-config audit and baseline tests pass; no intentional score
       change for observability-only work.

@@ -1,6 +1,6 @@
 //! Forbidden-condition evaluator used when `conditions` has a non-default set.
 //!
-//! Port of `shirolyzer/utils/conditions.py`.
+//! Port of `utils/conditions.py`.
 
 use crate::config::{Condition, Config};
 use crate::geometry::{finger_hand, finger_kind, Geometry, NF, NK};

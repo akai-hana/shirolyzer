@@ -1,0 +1,365 @@
+layout: ftrhcguenjsvld'oawpimzxky,.bq/
+fingering: flexible
+grid (QWERTY order, left/right split 5+5):
+  ftrhc | guenj
+  svld' | oawpi
+  mzxky | ,.bq/
+primary=4.506751260  corpus=shai
+secondary=4.658232666  corpus=douglas
+
+== primary score decomposition (per trigram) ==
+  key_effort          0.650003
+  key_press           3.000000
+  pair_vertical       0.083099
+  pair_cross          0.093442
+  pair_spread         0.001727
+  pair_roll          -0.184451
+  pair_leap           0.059516
+  pair_shift         -0.009935
+  pair_cap           -0.003780
+  pair_sfb            0.000000
+  pair_alt           -0.157168
+  pair_repeat         0.040216
+  trigram_redirect    0.049518
+  trigram_continue   -0.004924
+  trigram_scissor     0.134705
+  trigram_sfs         0.222652
+  finger_strength     0.530477
+  gate_penalty        0.001653
+  space               0.000000
+  sum                 4.506751
+  total               4.506751
+
+== corpus provenance ==
+  primary   shai         /home/akai/git/layout-opencode-investigation/corpora/shai/parsed (parsed) sha1=5f023eb006ba parser=parsed-json-v1
+  secondary douglas      /home/akai/git/layout-opencode-investigation/corpora/douglas/parsed (parsed) sha1=b66fdc6f1c4c parser=parsed-json-v1
+== bigram categories (% of letter bigrams, chosen fingering) ==
+  sfb                0.00
+  scissor_IM_hsb     0.69
+  scissor_IM_fsb     0.00
+  scissor_MR         0.00
+  scissor_RP         0.00
+  roll_in           14.35
+  roll_out           8.06
+  leap               8.23
+  alt               66.53
+  hand_alternation  66.53
+  repeat             2.83
+
+== roll tiers (configured, % of letter bigrams) ==
+  tier 1             8.00
+    1-2              3.92
+    2-1              4.08
+
+== worst bigrams (chosen cost, fingering, count) ==
+  xd  n=   85000    7.94  LMLI
+  dx  n=  152100    7.94  LILM
+  dc  n= 2142700    7.51  LMLI
+  cd  n= 1120400    7.51  LILM
+  gd  n=  624600    7.23  LILM
+  dg  n= 8916000    7.23  LMLI
+  fs  n= 2508700    7.08  LRLP
+  tm  n= 9550300    6.96  LRLI
+  mt  n=  906300    6.96  LILR
+  mf  n= 2131600    6.92  LILM
+  fm  n=  381200    6.92  LMLI
+  qj  n=    1300    6.83  RIRR
+  jq  n=   17700    6.83  RRRI
+  pn  n=  498000    6.73  RIRM
+  np  n= 2143900    6.73  RMRI
+  xh  n= 1204800    6.67  LILR
+  hx  n=   38800    6.67  LRLI
+  qi  n=  171600    6.62  RRRP
+  ji  n= 1496000    6.60  RRRP
+  sf  n= 5402600    6.55  LPLR
+
+== scissors (weight=cost*n, kind, fingering) ==
+  wi  n=156171900  cost= 3.55  RPRM  RMRP
+  pi  n=45230600  cost= 3.30  RPRR  RRRP
+  lt  n=37606300  cost= 2.93  LRLM  LMLR
+  sm  n=16845800  cost= 6.36  LPLR  LPLR
+  ip  n=33751700  cost= 2.89  RPRR  RPRR
+  tl  n=32445100  cost= 2.84  LRLM  LRLM
+  iq  n= 3836800  cost= 6.25  RPRR  RPRR
+  vs  n= 1004600  cost= 3.30  LPLR  LRLP
+  sv  n=  675800  cost= 2.89  LPLR  LPLR
+  qi  n=  171600  cost= 6.62  RPRR  RRRP
+  jp  n=  178200  cost= 6.20  RRRM  RRRM
+  pj  n=   44900  cost= 5.79  RRRM  RMRR
+
+== trigram patterns (chosen fingering, % of trigrams) ==
+  alternate                 38.61
+  hand_alternation          38.61
+  inroll                    25.79
+  outroll                   22.68
+  total_rolls               48.47
+  onehand                    2.46
+  redirect                   2.67
+  redirect_weak              1.11
+  total_redirects            3.78
+  legacy_sft                 0.03
+  legacy_sfb_tri             6.64
+  legacy_sfb_sft             6.67
+  legacy_sfs                 6.28
+  legacy_same_finger_total  12.95
+  repeat                    10.07
+  other                      0.00
+
+== true same-finger metrics (chosen vs default fingering, % of trigrams) ==
+  metric                 chosen  default    delta
+  sfb_true                 0.00     5.67    -5.67
+  sft_true                 0.00     0.13    -0.13
+  sfb_sft_true             0.00     5.80    -5.80
+  sfs_true                 2.88     6.62    -3.73
+  repeat_adjacent          6.67     6.67     0.00
+  repeat_skip              3.40     3.40     0.00
+  repeat_all              10.07    10.07     0.00
+  note: legacy_* values include repeated physical keys and retain their budget meaning; delta = chosen - default
+
+== redirect tiers (configured, % of trigrams) ==
+  tier 1             1.73  weight=0.000
+    1-3-2            0.60
+    3-1-2            1.13
+  tier 2             0.50  weight=0.050
+    1-2-1            0.15
+    2-1-2            0.06
+    1-3-1            0.05
+    3-1-3            0.24
+  tier 3             0.87  weight=0.100
+    3-2-3            0.29
+    2-3-2            0.59
+  tier 4             0.35  weight=2.000
+    2-1-3            0.35
+    1-4-1            0.00
+  tier 5             0.00  weight=3.500
+    4-1-4            0.00
+    4-2-4            0.00
+    2-4-2            0.00
+  tier 6             0.15  weight=5.000
+    3-4-3            0.00
+    4-3-4            0.04
+    3-2-4            0.01
+    4-2-3            0.09
+    3-1-4            0.00
+  unclassified       0.19
+  note: redirect/redirect_weak are deprecated legacy labels
+
+== finger load (% of all strokes) ==
+  L: P= 7.38%  R=12.87%  M=15.56%  I=13.01%
+  R: P= 8.31%  R=11.00%  M=17.08%  I=14.79%
+
+== shortcut constraints (left Ctrl + key) ==
+  z  key=X  hand=left  chosen=LI ( 67.3%)  default=LR  same_hand=yes  same_finger=no
+  x  key=C  hand=left  chosen=LI ( 87.9%)  default=LI  same_hand=yes  same_finger=no
+  c  key=T  hand=left  chosen=LI ( 85.0%)  default=LM  same_hand=yes  same_finger=no
+  v  key=S  hand=left  chosen=LR ( 93.1%)  default=LR  same_hand=yes  same_finger=no
+  t  key=W  hand=left  chosen=LR ( 99.0%)  default=LR  same_hand=yes  same_finger=no
+  y  key=B  hand=left  chosen=LI ( 97.4%)  default=LI  same_hand=yes  same_finger=no
+  note: left Ctrl is treated as LP; this section is report-only
+
+== human factors (report-only) ==
+  cross-hand alt usage: 4.06% of letter strokes
+  g@Y default RM 0.04%  cross 99.96%  ing:LI:323346600, igh:LI:48856300, ght:LI:44808200, age:LI:38728600, ugh:LI:30897000
+  o@H default RI 75.03%  cross 24.97%  ion:LI:172012400, tio:LI:138046200, con:LI:69770400, ons:LI:62339000, one:LI:59027900
+  punctuation is not in the primary score; apostrophe n-grams are scored separately
+  dead keys: G=''' shift='"'  N=',' shift='<'  M='.' shift='>'  /='/' shift='?'
+  apostrophe '\'' (shift '"') modeled=true keys=G
+  bigram ", " (prose) crosses N+SPACE
+  bigram ". " (prose) crosses M+SPACE
+  bigram "? " (prose) crosses /+SPACE
+  bigram "//" (programming) crosses /
+  bigram "/*" (programming) crosses /
+  bigram "*/" (programming) crosses /
+  bigram "<=" (programming) crosses N
+  bigram "=>" (programming) crosses M
+  note: alt fingering is not penalised; punctuation is not in the primary score
+
+== preference metrics (primary) ==
+  scissor bands:
+    mild      count=1329303500   share= 4.06%  weighted_cost=0.118027  multiplier=0.500
+    moderate  count=145032700    share= 0.44%  weighted_cost=0.014502  multiplier=0.750
+    severe    count=223100       share= 0.00%  weighted_cost=0.000042  multiplier=1.000
+    extreme   count=20854200     share= 0.06%  weighted_cost=0.004040  multiplier=0.120
+  redirect tiers:
+    tier 1  weight=0.000  count=415501600    share= 1.73%  weighted_cost=0.000000
+    tier 2  weight=0.050  count=121278800    share= 0.50%  weighted_cost=0.000504
+    tier 3  weight=0.100  count=209497200    share= 0.87%  weighted_cost=0.001742
+    tier 4  weight=2.000  count=83778300     share= 0.35%  weighted_cost=0.013933
+    tier 5  weight=3.500  count=12600        share= 0.00%  weighted_cost=0.000004
+    tier 6  weight=5.000  count=35255700     share= 0.15%  weighted_cost=0.014658
+    unclassified count=44925400     share= 0.19%
+  rolls:
+    1-2  count=1343486400   share= 4.11%  weighted_cost=-0.028778
+    2-1  count=1362989200   share= 4.16%  weighted_cost=-0.023190
+    2-3  count=1082414500   share= 3.31%  weighted_cost=-0.006537
+    3-2  count=2121002100   share= 6.48%  weighted_cost=-0.017279
+    3-4  count=272351600    share= 0.83%  weighted_cost=-0.000542
+    4-3  count=1240464500   share= 3.79%  weighted_cost=-0.017491
+  finger strength:
+    letters   mean_penalty=0.176826
+    bigrams   mean_penalty=0.174859
+    trigrams  mean_penalty=0.176826
+  top letters:
+    e@I count=5049752200   RM=97.9% RR=2.1%
+    t@W count=3833864500   LR=99.0% LM=1.0%
+    a@J count=3420080900   RI=98.8% RM=1.2%
+    o@H count=3276496100   RI=75.0% LI=25.0%
+    i@; count=3061483000   RP=94.0% RR=6.0%
+    n@O count=2919383600   RR=94.1% RM=5.9%
+    s@A count=2759178200   LP=89.3% LR=9.9% LM=0.8%
+    r@E count=2598018000   LM=90.9% LR=9.1%
+    h@R count=1965044100   LM=94.8% LI=3.3% LR=1.9%
+    l@D count=1779045600   LM=80.8% LR=10.4% LI=8.8%
+  top bigrams:
+    th  LR-LM  cost=2.581  roll_in
+    he  LM-RM  cost=2.480  alt
+    in  RP-RR  cost=2.310  roll_in
+    an  RI-RR  cost=2.525  leap
+    er  RM-LM  cost=2.080  alt
+    re  LM-RM  cost=2.080  alt
+    on  LI-RR  cost=2.877  alt
+    at  RI-LR  cost=2.180  alt
+    or  RI-LM  cost=2.430  alt
+    nd  RR-LI  cost=2.180  alt
+  top trigrams:
+    the  LR-LM-RM  cost=3.561  inroll
+    ing  RP-RR-LI  cost=3.967  inroll
+    and  RI-RR-LI  cost=3.455  outroll
+    ion  RP-LI-RR  cost=4.207  alternate
+    ent  RM-RR-LR  cost=3.180  outroll
+    for  LR-RI-LM  cost=3.960  alternate
+    you  LI-RI-RM  cost=3.585  outroll
+    tio  LR-RP-LI  cost=4.208  alternate
+    hat  LM-RI-LR  cost=3.560  alternate
+    tha  LR-LM-RI  cost=3.511  inroll
+  (full top-25 lists and per-pattern costs are in the JSON report)
+
+== preference metrics (secondary) ==
+  scissor bands:
+    mild      count=26065500     share= 3.88%  weighted_cost=0.106549  multiplier=0.500
+    moderate  count=3929600      share= 0.58%  weighted_cost=0.019517  multiplier=0.750
+    severe    count=0            share= 0.00%  weighted_cost=0.000000  multiplier=1.000
+    extreme   count=772500       share= 0.11%  weighted_cost=0.007274  multiplier=0.120
+  redirect tiers:
+    tier 1  weight=0.000  count=18323500     share= 3.68%  weighted_cost=0.000000
+    tier 2  weight=0.050  count=10215000     share= 2.05%  weighted_cost=0.002050
+    tier 3  weight=0.100  count=5333500      share= 1.07%  weighted_cost=0.002140
+    tier 4  weight=2.000  count=631000       share= 0.13%  weighted_cost=0.005065
+    tier 5  weight=3.500  count=2400         share= 0.00%  weighted_cost=0.000034
+    tier 6  weight=5.000  count=3071700      share= 0.62%  weighted_cost=0.061635
+    unclassified count=1630700      share= 0.33%
+  rolls:
+    1-2  count=22237400     share= 3.31%  weighted_cost=-0.025063
+    2-1  count=17232900     share= 2.56%  weighted_cost=-0.015307
+    2-3  count=33479500     share= 4.98%  weighted_cost=-0.011055
+    3-2  count=28497300     share= 4.24%  weighted_cost=-0.011260
+    3-4  count=4350600      share= 0.65%  weighted_cost=-0.000380
+    4-3  count=14853800     share= 2.21%  weighted_cost=-0.011405
+  finger strength:
+    letters   mean_penalty=0.176247
+    bigrams   mean_penalty=0.170672
+    trigrams  mean_penalty=0.176247
+  top letters:
+    e@I count=113384500    RM=98.7% RR=1.3%
+    a@J count=109472000    RI=98.8% RM=1.2%
+    o@H count=79924900     RI=69.6% LI=30.4%
+    s@A count=66333200     LP=96.8% LR=3.2% LM=0.1%
+    n@O count=59948000     RR=95.6% RM=4.4%
+    r@E count=55628200     LM=92.3% LR=7.7%
+    i@; count=54085900     RP=91.4% RR=8.6%
+    l@D count=49089000     LM=82.2% LR=10.7% LI=7.1%
+    d@F count=43084800     LI=94.5% LM=5.5%
+    u@U count=36675100     RM=55.8% RI=44.2%
+  top bigrams:
+    de  LI-RM  cost=2.030  alt
+    en  RM-RR  cost=2.050  roll_out
+    es  RM-LP  cost=2.430  alt
+    os  RI-LP  cost=2.780  alt
+    la  LM-RI  cost=2.420  alt
+    er  RM-LM  cost=2.080  alt
+    ue  RI-RM  cost=2.104  roll_out
+    as  RI-LP  cost=2.380  alt
+    an  RI-RR  cost=2.525  leap
+    ra  LM-RI  cost=2.030  alt
+  top trigrams:
+    que  RR-RI-RM  cost=4.209  redirect_tier_1:3-1-2
+    ent  RM-RR-LR  cost=3.180  outroll
+    con  LM-LI-RR  cost=3.853  inroll
+    los  LM-RI-LP  cost=4.623  alternate
+    est  RM-LP-LR  cost=3.080  inroll
+    nte  RR-LR-RM  cost=3.360  alternate
+    ado  RI-LM-LI  cost=5.134  inroll
+    ien  RP-RM-RR  cost=13.950  redirect_tier_6:4-2-3
+    las  LM-RI-LP  cost=4.223  alternate
+    sta  LP-LR-RI  cost=3.030  inroll
+  (full top-25 lists and per-pattern costs are in the JSON report)
+
+== alpha fingering guide (trigram DP) ==
+  a@J  default RI  RI=98.8% RM=1.2%
+      alt RM: wha:21324000, oad:7137500, roa:6397800, ena:5780000, loa:5115600
+  b@,  default RR  RR=82.1% RI=15.6% RM=2.3%
+      alt RI: bil:11770600, bri:10551800, ibl:9861800, bli:9726500, bei:8040800
+      alt RM: bui:6375600, pub:6100800, iab:2256700, ubj:1642200, pab:1046900
+  c@T  default LM  LI=85.0% LM=15.0%
+      alt LI: com:69687000, nce:61238900, ect:55775400, can:53322000, cti:42245400
+  d@F  default LI  LI=96.3% LM=3.7%
+      alt LM: day:24167100, dge:7856200, ady:5183000, ody:4972000, oda:4101200
+  e@I  default RM  RM=97.9% RR=2.1%
+      alt RR: use:48155400, ure:39738400, ude:13592200, ute:11671500, bei:8040800
+  f@Q  default LR  LR=93.2% LM=4.4% LP=2.4%
+      alt LM: elf:8591800, flo:5930700, fla:4499200, fle:3521900, fli:3016100
+      alt LP: tif:7182300, fit:6485300, fat:2939500, fut:2494900, taf:2035800
+  g@Y  default RM  LI=100.0% RM=0.0%
+      alt LI: ing:323346600, igh:48856300, ght:44808200, age:38728600, ugh:30897000
+  h@R  default LM  LM=94.8% LI=3.3% LR=1.9%
+      alt LI: thr:21538100, had:17860700, hro:13592300, hed:10963900, hre:8101300
+      alt LR: hic:24935200, hig:10872300, hec:4446900, hly:2301500, hod:2196200
+  i@;  default RP  RP=94.0% RR=6.0%
+      alt RR: ain:42595500, ini:39303400, nin:26584000, imp:19665400, win:17676000
+  j@P  default RR  RR=92.3% RM=7.7%
+      alt RM: job:3460700, enj:2692800, obj:1700200, jin:201400, iji:131600
+  k@V  default LI  LI=82.2% LM=17.8%
+      alt LM: ack:28707500, ick:16155200, ock:10646800, cke:10061000, eck:6008000
+  l@D  default LM  LM=80.8% LR=10.4% LI=8.8%
+      alt LR: cal:35661300, lic:20561300, hil:19352200, hel:16639000, col:16311400
+      alt LI: lit:27389500, lat:26248900, tal:22452500, ful:17144100, tel:15654700
+  m@Z  default LP  LP=90.0% LR=5.1% LI=2.9% LM=2.0%
+      alt LR: sma:7353700, oma:6619500, amo:6351800, xam:4709700, rms:4429600
+      alt LI: ems:8570200, fam:7207400, tme:6649700, ams:4737500, ims:2896200
+      alt LM: som:29747600, maz:2159800, sym:1286100, miz:1274200, shm:979900
+  n@O  default RR  RR=94.1% RM=5.9%
+      alt RM: nin:53168000, ain:42595500, own:27301600, now:26433400, ini:19651700
+  o@H  default RI  RI=75.0% LI=25.0%
+      alt LI: ion:172012400, tio:138046200, con:69770400, ons:62339000, one:59027900
+  p@L  default RR  RR=95.6% RM=4.1% RI=0.3%
+      alt RM: imp:19665400, pin:11628800, pai:7749500, epa:6722900, ipp:6649000
+      alt RI: inp:707500, unp:676900, npu:625300, npr:478100, npl:289900
+  q@.  default RR  RR=95.4% RP=3.4% RM=1.2% RI=0.0%
+      alt RP: niq:2458400, enq:105200, isq:88800, qmi:78700, irq:23500
+      alt RM: nqu:809000, biq:68200, piq:29900, jqu:15000, iaq:5700
+      alt RI: qmj:1400, jqp:600, jcq:400, jqm:400, qja:300
+  r@E  default LM  LM=90.9% LR=9.1%
+      alt LR: her:115820300, rec:30817100, har:22839500, car:21800300, ric:21664000
+  s@A  default LP  LP=89.3% LR=9.9% LM=0.8%
+      alt LR: som:29747600, als:29172400, lso:18694100, ays:17929500, ves:17194400
+      alt LM: ems:8570200, ams:4737500, ims:2896200, mse:2695000, oms:2070500
+  t@W  default LR  LR=99.0% LM=1.0%
+      alt LM: fte:17026000, aft:15358100, oft:6830900, ift:3943300, eft:3659500
+  u@U  default RM  RM=91.0% RI=9.0% RR=0.0%
+      alt RI: jus:19531500, qui:16792100, ues:14263000, ula:13936200, que:13829500
+      alt RR: bpu:1600, wui:800
+  v@S  default LR  LR=93.1% LM=6.2% LI=0.6%
+      alt LM: ves:17194400, vis:11011800, lve:7328000, siv:6153500, sev:4909900
+      alt LI: fiv:2535900, fav:2465700, fev:128000, tvs:72000, vsk:72000
+  w@K  default RM  RM=64.1% RI=26.8% RR=9.2%
+      alt RI: wer:28641600, own:27301600, now:26433400, new:21197400, owe:18241000
+      alt RR: wha:21324000, who:21262200, wou:17936600, wea:5721500, alw:5067300
+  x@C  default LI  LI=87.9% LM=12.1% LR=0.0%
+      alt LM: exc:7311600, xce:3699100, xac:1753800, xec:1598400, xci:1437500
+      alt LR: xoz:100
+  y@B  default LI  LI=97.4% LM=2.6%
+      alt LM: ogy:3722200, guy:2349800, rgy:2212900, gly:2182200, lty:1846900
+  z@X  default LR  LI=67.3% LR=29.7% LP=3.0% LM=0.0%
+      alt LI: ize:11689700, zin:3918300, niz:3867400, iza:3854300, siz:3208900
+      alt LP: oze:766900, doz:449800, roz:322200, ozo:203800, ozz:188400
+      alt LM: szc:5200, xze:2500, oxz:2400, xza:600, wxz:500

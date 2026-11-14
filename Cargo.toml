@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Layout analyzer and generator based on preferential, context-dependent fingering"
 license = "MIT"
+repository = "https://github.com/akai-hana/shirolyzer"
 
 [[bin]]
 name = "shirolyzer"

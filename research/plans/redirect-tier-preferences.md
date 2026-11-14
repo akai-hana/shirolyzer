@@ -19,18 +19,18 @@ geometry, corpora, gates, and alt-finger logic do not change.
 
 Three places currently encode redirect behavior:
 
-- `shirolyzer/src/model.rs:632` detects a same-hand turn with
+- `src/model.rs:632` detects a same-hand turn with
   `d1 * d2 < 0`.
-- `shirolyzer/src/model.rs:645` charges `W_REDIRECT_WEAK` when any finger is a
+- `src/model.rs:645` charges `W_REDIRECT_WEAK` when any finger is a
   pinky and `W_REDIRECT` otherwise.  Both are multiplied by
   `Scales::redirect`.
-- `shirolyzer/src/analyze.rs:192` (`trigram_pattern`) classifies a same-hand
+- `src/analyze.rs:192` (`trigram_pattern`) classifies a same-hand
   turn as `redirect` when an index is involved and `redirect_weak` otherwise.
   `analyze.rs:237` aggregates those into `total_redirects`.
 
 The model and analyzer rules are related but not identical, and neither can
 distinguish `1-2-1` from `4-2-4`.  `worst` also prints the same coarse label
-(`shirolyzer/src/worst.rs:224`).
+(`src/worst.rs:224`).
 
 ## Finger notation and mapping
 
@@ -244,7 +244,7 @@ If a structured form is useful, add it in addition, not instead:
 
 The Rust binary is the runtime implementation.  If refitting/LOO remains an
 actively used workflow, mirror the parser and cost lookup in
-`shirolyzer/utils/config.py` and `shirolyzer/utils/comfort.py` in the same PR.
+`utils/config.py` and `utils/comfort.py` in the same PR.
 Otherwise explicitly note in the plan/PR that the Python tools still implement
 the legacy curve and open a follow-up issue, so the divergence is intentional.
 
@@ -282,11 +282,11 @@ Add or update:
 - `worst` test:
   - the pattern column contains a tier label for a redirect ngram.
 - Regression fixtures:
-  - `shirolyzer/tests/parity.rs` tri-table known answers;
-  - `shirolyzer/tests/baseline.rs` reference trigram scores;
-  - `shirolyzer/tests/commands.rs` analyze score, compare output, compute smoke
+  - `tests/parity.rs` tri-table known answers;
+  - `tests/baseline.rs` reference trigram scores;
+  - `tests/commands.rs` analyze score, compare output, compute smoke
     expectation;
-  - `shirolyzer/config/score_baseline.json` via `check-baseline --write` only
+  - `config/score_baseline.json` via `check-baseline --write` only
     after confirming every changed number is explained by the new redirect
     prices.
 
@@ -296,7 +296,7 @@ Run:
 just build
 just test
 just check
-cargo test --manifest-path shirolyzer/Cargo.toml --release -- --ignored
+cargo test --release -- --ignored
 ```
 
 (`just dev-tools` too if the Python tooling is updated.)

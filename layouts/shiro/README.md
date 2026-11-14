@@ -61,7 +61,7 @@ Reference name: `shiro-e-rest`. Original seed: `382233130`.
 | common-word bigram cost (en50k) | `2.6913` |
 | common-word trigram cost (en50k) | `4.4463` |
 | common-word SFS (en50k) | `2.15%` |
-| common-word one-hand (en50k) | `2.00%` |
+| common-word one-hand (en50k) | `2.09%` |
 | common-word redirect (en50k) | `3.58%` |
 
 The biggest weighted weaknesses are `we`, `whe`, `som`, `ien`, `hey`, `tiv`,
@@ -83,10 +83,11 @@ target/release/shirolyzer analyze "$(cat layouts/shiro/layout.txt)" \
   --config layouts/shiro/config.yaml.bak
 ```
 
-Generate a new layout into a per-layout directory:
+Reproduce the run into a separate artifact directory (this avoids overwriting
+the curated `layouts/shiro/` README):
 
 ```sh
-target/release/shirolyzer generate --layout shiro --seed 382233130
+target/release/shirolyzer generate --layout shiro-repro --seed 382233130
 ```
 
 `generate --layout <name>` creates `layouts/<name>/` and writes the layout,

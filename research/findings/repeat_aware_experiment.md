@@ -2,8 +2,8 @@
 
 Date: 2026-11-09
 Issue: #109
-Config: `shirolyzer/config/experiments/repeat_aware.yaml`
-Seeds: `0 1 2` (`shirolyzer/config/experiments/repeat_aware.seeds`)
+Config: `config/experiments/repeat_aware.yaml`
+Seeds: `0 1 2` (`config/experiments/repeat_aware.seeds`)
 Budget: default compute budget (28 runs, 200,000 iterations, 8 ILS rounds, unlimited polish)
 Command: `cargo run --release -- compute --config config/experiments/repeat_aware.yaml --seed N`
 
@@ -30,7 +30,7 @@ That is `bthcrmdisjnply;eougavk,zxq.wf/`. It differs from the shipped layout `bt
 
 ## Comparison under the shipped config
 
-Scores and true metrics from `analyze` under `shirolyzer/config/config.yaml`:
+Scores and true metrics from `analyze` under `config/config.yaml`:
 
 | Metric | Shipped layout | SFS-weighted layout | Delta |
 |--------|---------------:|--------------------:|------:|

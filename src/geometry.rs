@@ -1,8 +1,8 @@
 //! ANSI physical geometry: stagger, hand, row, rest posture, reach, and the
 //! key/finger displacement tables used by the comfort model.
 //!
-//! This is a direct port of `shirolyzer/utils/ansi/ansi.py` and
-//! `shirolyzer/utils/fingers.py`.  The Python code uses a Delaunay
+//! This is a direct port of `utils/ansi/ansi.py` and
+//! `utils/fingers.py`.  The Python code uses a Delaunay
 //! triangulation only as an inside-the-approved-hull test; an explicit convex
 //! hull gives the same answer.
 

@@ -48,9 +48,8 @@ struct AnalyzeArgs {
     config: Option<PathBuf>,
     #[arg(long)]
     layout_flag: Option<String>,
-    /// Name of the layout artifact directory under `layouts/`
-    #[arg(long, alias = "name")]
-    layout: Option<String>,
+    #[arg(long)]
+    name: Option<String>,
     #[arg(long = "primary-corpus", action = clap::ArgAction::Append)]
     primary_corpus: Vec<String>,
     #[arg(long = "secondary-corpus", action = clap::ArgAction::Append)]
@@ -383,10 +382,7 @@ fn main() -> Result<()> {
         Command::Xkb(args) => {
             let name = args.name.clone().unwrap_or(xkb::safe_name(&args.layout)?);
             let dir = shirolyzer::paths::layout_xkb_dir(&name);
-            let path = args
-                .out
-                .clone()
-                .unwrap_or_else(|| dir.join(&name));
+            let path = args.out.clone().unwrap_or_else(|| dir.join(&name));
             xkb::write(&path, &args.layout, &name)?;
             println!("wrote {}", path.display());
             if args.install {

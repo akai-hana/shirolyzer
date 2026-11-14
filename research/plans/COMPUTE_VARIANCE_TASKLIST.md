@@ -119,7 +119,7 @@ Steps:
 - [x] Keep the top-of-list ordering stable by primary, then final score.
 - [x] Add unit tests for `letter_distance`, diverse selection, and
       punctuation canonicalization.
-- [x] Document the new flag and the punctuation rule in `shirolyzer/README.md`.
+- [x] Document the new flag and the punctuation rule in `README.md`.
 
 Suggested commit: `compute: diversify ILS by letter placement`
 
@@ -168,7 +168,7 @@ Steps:
       A `28x25000` control had a spread of `0.005378908`, so anneal depth still
       matters on its own.
 - [x] Record the measurement command, seed range, spread, and decision in the
-      tracking issue and in `shirolyzer/README.md`.
+      tracking issue and in `README.md`.
 - [x] Do not change baselines or fitted scores as part of this phase.
 
 Suggested commit: `compute: measure variance and choose defaults`
@@ -179,14 +179,14 @@ Branch: `compute/variance` (integration branch)
 
 Steps:
 
-- [x] `cargo fmt --manifest-path shirolyzer/Cargo.toml --check`
-- [x] `cargo clippy --manifest-path shirolyzer/Cargo.toml --all-targets -- -D warnings`
-- [x] `cargo test --manifest-path shirolyzer/Cargo.toml --release`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test --release`
       The 52 library tests pass, including `incremental_scores_match_full_score`.
       `baseline`, four `commands` tests, and one `parity` test still fail
       because of the pre-existing `finger_balance` change in 280d11e; they fail
       identically on `main` at 78beef1, so they are unrelated to this work.
-- [x] `cargo test --manifest-path shirolyzer/Cargo.toml --release --test commands compute_smoke -- --ignored`
+- [x] `cargo test --release --test commands compute_smoke -- --ignored`
 - [x] `just dev-tools`
 - [x] Run a short before/after `compute` comparison with a fixed seed and
       confirm `final` and `primary` agree. Seed `42` produced
@@ -248,15 +248,15 @@ Suggested commit: `compute: verify variance reduction and document defaults`
 
 ## Relevant files
 
-- `shirolyzer/src/search.rs` — incremental scoring, penalty update, quench,
+- `src/search.rs` — incremental scoring, penalty update, quench,
       ILS/anneal primitives, incremental-score tests.
-- `shirolyzer/src/compute.rs` — start scheduling, stopping rules, ILS
+- `src/compute.rs` — start scheduling, stopping rules, ILS
       selection, hits, output fields.
-- `shirolyzer/src/diversity.rs` — letter distance, diverse selection,
+- `src/diversity.rs` — letter distance, diverse selection,
       result merging.
-- `shirolyzer/src/evaluate.rs` — full score, penalty, layout string.
-- `shirolyzer/src/main.rs` — new CLI flags.
-- `shirolyzer/tests/commands.rs` — compute smoke expectations.
-- `shirolyzer/README.md` — user-facing compute flags and variance guidance.
+- `src/evaluate.rs` — full score, penalty, layout string.
+- `src/main.rs` — new CLI flags.
+- `tests/commands.rs` — compute smoke expectations.
+- `README.md` — user-facing compute flags and variance guidance.
 - `justfile` — variance helper recipe.
 - `Reducing run-to-run variance in shirolyzer compute.md` — source analysis.

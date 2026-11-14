@@ -24,9 +24,9 @@ preferences. No implementation is part of this document.
   comfortable motions.
 - Use corpus measurements and reference-layout results to choose weights. Do
   not guess magnitudes when a sweep can show the effect on layout structure.
-- Keep `shirolyzer/tests/fixtures/config.reference.yaml` frozen unless an issue
+- Keep `tests/fixtures/config.reference.yaml` frozen unless an issue
   explicitly says to refresh reference baselines.
-- Do not modify `shirolyzer/config/references.toml` except when a new reference
+- Do not modify `config/references.toml` except when a new reference
   layout is intentionally accepted.
 
 ## Definitions
@@ -121,7 +121,7 @@ For every work item:
 4. Run `just check` before the final commit on the branch.
 5. Run the ignored compute smoke test when the change touches search or
    scoring:
-   `cargo test --manifest-path shirolyzer/Cargo.toml --release --test commands compute_smoke -- --ignored`
+   `cargo test --release --test commands compute_smoke -- --ignored`
 6. Check off the completed work item's boxes, then commit the changes in
    logical commits. Open a PR referencing the issue, or merge the branch
    directly when the work is already reviewed.

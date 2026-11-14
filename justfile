@@ -30,6 +30,6 @@ dev-tools:
     {{python}} -c "import fitting, utils.fitlib, utils.gateset"
 
 # Run the full local verification suite
-check: test
+check: test dev-tools
     cargo fmt --manifest-path {{manifest}} --check
     cargo clippy --manifest-path {{manifest}} --all-targets -- -D warnings

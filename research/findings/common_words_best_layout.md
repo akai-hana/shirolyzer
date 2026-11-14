@@ -8,7 +8,7 @@ least two, top 10,000 by frequency. Total weighted tokens: 628,837,185.
 Command:
 
 ```sh
-shirolyzer/target/release/shirolyzer words \
+target/release/shirolyzer words \
   "ftrhcguenjsvld'oawpimzxky,.bq/" \
   --wordlist /tmp/opencode/en_50k.txt --limit 10000 --top 20
 ```
@@ -76,7 +76,7 @@ The onehand list is dominated by `right`, `people`, `thought`, and `night`.
 `words --out-corpus` can turn the same weighted word list into a parsed corpus:
 
 ```sh
-shirolyzer/target/release/shirolyzer words \
+target/release/shirolyzer words \
   "ftrhcguenjsvld'oawpimzxky,.bq/" \
   --wordlist /tmp/opencode/en_50k.txt --limit 10000 \
   --out-corpus /tmp/opencode/common-words-corpus
@@ -86,7 +86,7 @@ A short run with the common-word corpus as the **secondary** corpus kept the
 best layout unchanged:
 
 ```sh
-shirolyzer/target/release/shirolyzer generate \
+target/release/shirolyzer generate \
   --seed-layout "ftrhcguenjsvld'oawpimzxky,.bq/" \
   --secondary-corpus /tmp/opencode/common-words-corpus \
   --runs 4 --iters 50000 --ils 2 --secondary-rounds 2 \

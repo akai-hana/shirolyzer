@@ -7,7 +7,7 @@
 # is kept in sync with config.yaml.
 #
 # Use it with any analysis command, for example:
-#   shirolyzer analyze 'layout' --config config/config.fixed.yaml
+#   target/release/shirolyzer analyze 'layout' --config config/config.fixed.yaml
 #
 # Fingermap tokens are hand/finger pairs in physical-key order:
 # LP/LR/LM/LI on the left hand and RI/RM/RR/RP on the right hand.
@@ -16,6 +16,7 @@
 # Physical key order is defined by the geometry file.
 
 general:
+  # Relative paths are resolved from the config/ directory.
   geometry: geometry/ansi.yaml
   # "fixed" uses the fingermap below for every ngram and ignores alt_fingers.
   fingering: fixed

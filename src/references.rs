@@ -1,6 +1,6 @@
 //! Load and append reference layouts from `config/references.toml`.
 //!
-//! Port of `shirolyzer/utils/references.py`.
+//! Port of `utils/references.py`.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

@@ -21,7 +21,7 @@ optimization target.
 
 ## Current metrics (original layout)
 
-Shipped config (`shirolyzer/config/config.yaml`), primary corpus Shai:
+Shipped config (`config/config.yaml`), primary corpus Shai:
 
 | Metric | Value |
 |--------|------:|
@@ -59,7 +59,8 @@ letter strokes are cross-hand (`m` is `99.99%` LI on physical `Y`, `o` is
 
 ## Finding 1: the shortcut hand constraint is not fully applied
 
-`shirolyzer/tomorrow.txt` states that `z, x, c, v, t, y` are restricted to the
+The original project notes (now summarized in `README.md`) state that
+`z, x, c, v, t, y` are restricted to the
 left hand for one-handed Ctrl shortcuts. The config only contains:
 
 ```yaml
@@ -155,7 +156,7 @@ and explicit alt rules, is the design target.
 
 ## Finding 6: documentation and comparison drift
 
-- `references.toml` and `shirolyzer/README.md` previously recorded
+- `references.toml` and `README.md` previously recorded
   `4.292242`; the current shipped config produces `4.261835`. The stored value
   came from an intermediate config state.
 - `compare` under the shipped hard-SFB config is not a fair reference
@@ -207,7 +208,7 @@ n p l y ; | e o u g a
 v k x z , | q . w f /
 ```
 
-Shipped config (`shirolyzer/config/config.yaml`), primary corpus Shai:
+Shipped config (`config/config.yaml`), primary corpus Shai:
 
 | Metric | Value |
 |--------|------:|

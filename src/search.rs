@@ -1,5 +1,5 @@
 //! Local-search primitives (quench, anneal, perturb), ported from
-//! `shirolyzer/utils/search.py`.
+//! `utils/search.py`.
 //!
 //! `quench` and `anneal` for the corpus evaluator use incremental scoring:
 //! swapping or cycling letters only changes the trigrams containing those

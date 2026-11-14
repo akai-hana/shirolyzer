@@ -32,6 +32,7 @@ fn config_path() -> String {
 }
 
 const SHIRO: &str = "bthcrmdisjnply'eougavkxz,q.wf/";
+const SHIRO_FINAL: &str = "ftrhcguenjsvld'oawpimzxky,.bq/";
 
 #[test]
 fn render_matches_reference() {
@@ -48,9 +49,9 @@ fn xkb_matches_reference() {
     let out = run(&[
         "xkb",
         "--layout",
-        SHIRO,
+        SHIRO_FINAL,
         "--name",
-        "mine",
+        "shiro",
         "--out",
         path.to_str().unwrap(),
     ]);
@@ -60,7 +61,7 @@ fn xkb_matches_reference() {
         String::from_utf8_lossy(&out.stderr)
     );
     let generated = std::fs::read_to_string(&path).unwrap();
-    let reference = std::fs::read_to_string(root().join("xkb/mine")).unwrap();
+    let reference = std::fs::read_to_string(root().join("layouts/shiro/xkb/shiro")).unwrap();
     assert_eq!(generated, reference);
 }
 
@@ -381,8 +382,7 @@ fn compare_warns_about_hard_sfb_config() {
 
 #[test]
 fn stored_shiro_score_matches_shipped_config() {
-    let refs_text =
-        std::fs::read_to_string(root().join("config/references.toml")).unwrap();
+    let refs_text = std::fs::read_to_string(root().join("config/references.toml")).unwrap();
     let refs: toml::Value = toml::from_str(&refs_text).unwrap();
     let shiro = refs["reference"]
         .as_array()

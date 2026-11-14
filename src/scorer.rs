@@ -1,6 +1,6 @@
 //! Scorer tables over the 30-key ANSI layout plus the space "key".
 //!
-//! Port of `shirolyzer/utils/scorer.py`.
+//! Port of `utils/scorer.py`.
 
 use anyhow::{bail, Result};
 use rayon::prelude::*;

@@ -45,7 +45,7 @@ pub fn model_dir() -> PathBuf {
 }
 
 pub fn geometry_dir() -> PathBuf {
-    repo_root().join("geometry")
+    config_dir().join("geometry")
 }
 
 pub fn geometry_file(name: &str) -> PathBuf {

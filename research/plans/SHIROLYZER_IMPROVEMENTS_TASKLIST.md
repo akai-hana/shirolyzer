@@ -66,7 +66,7 @@ branches).
 - [x] Add unit tests for SFT, lumped Sfb/BadSfb, alternate, and non-SFT cases.
 - [x] Add a parity regression test for exclusive categories, overlapping
       repeats, and the `sfb_sft` sum.
-- [x] Document the new category semantics in `shirolyzer/README.md`.
+- [x] Document the new category semantics in `README.md`.
 
 Suggested commit: `analyzer: split SFT from adjacent SFB diagnostics`
 
@@ -165,13 +165,13 @@ Suggested commit: `analyzer: add optional skipgram and shift reports`
 
 ## Verification
 
-- [x] `cargo fmt --manifest-path shirolyzer/Cargo.toml --check`
-- [x] `cargo clippy --manifest-path shirolyzer/Cargo.toml --all-targets -- -D warnings`
-- [x] `cargo test --manifest-path shirolyzer/Cargo.toml --release`
-- [x] `cargo test --manifest-path shirolyzer/Cargo.toml --release --test commands compute_smoke -- --ignored`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test --release`
+- [x] `cargo test --release --test commands compute_smoke -- --ignored`
 - [x] Baseline and audit gates via the reference config
       (`cargo test --release --test commands audit_and_check_baseline_pass`)
-- [ ] `shirolyzer/target/release/shirolyzer check-baseline` against the shipped
+- [ ] `target/release/shirolyzer check-baseline` against the shipped
       `config.yaml` (blocked by the pre-existing shipped-config vs
       reference-baseline mismatch documented in
       `research/plans/alt-finger-positional-overlap.md`; the reference-config
@@ -193,11 +193,11 @@ Suggested commit: `analyzer: add optional skipgram and shift reports`
 
 ## Relevant files
 
-- `shirolyzer/src/analyze.rs` — trigram classifier, category reports, output.
-- `shirolyzer/src/worst.rs` — shared trigram classification for worst ngrams.
-- `shirolyzer/src/compute.rs` — primary-sacrifice metrics and budget.
-- `shirolyzer/config/config.yaml`, `config.fixed.yaml` — sacrifice comments.
-- `shirolyzer/tests/commands.rs` — command and compute-smoke expectations.
-- `shirolyzer/README.md` — user-facing category and budget semantics.
-- `shirolyzer/src/scorer.rs`, `evaluate.rs` — later score decomposition work.
-- `shirolyzer/src/geometry.rs` — later geometry known-answer tests.
+- `src/analyze.rs` — trigram classifier, category reports, output.
+- `src/worst.rs` — shared trigram classification for worst ngrams.
+- `src/compute.rs` — primary-sacrifice metrics and budget.
+- `config/config.yaml`, `config.fixed.yaml` — sacrifice comments.
+- `tests/commands.rs` — command and compute-smoke expectations.
+- `README.md` — user-facing category and budget semantics.
+- `src/scorer.rs`, `evaluate.rs` — later score decomposition work.
+- `src/geometry.rs` — later geometry known-answer tests.

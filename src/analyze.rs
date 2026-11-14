@@ -1,6 +1,6 @@
 //! `analyze`: detailed layout report.
 //!
-//! Port of `shirolyzer/commands/analyze.py`.
+//! Port of the original Python analyzer.
 
 use std::collections::HashMap;
 use std::path::Path;

@@ -152,7 +152,7 @@ Commits:
 3. `config: adopt the shortcut-constrained layout`
 4. `docs: record shortcut constraint results`
 
-Problem: `tomorrow.txt` requires `z,x,c,v,t,y` on the left hand. The config
+Problem: the original project notes require `z,x,c,v,t,y` on the left hand. The config
 only restricts `z,x,c,v`, and the computed layout puts `y` on the right hand.
 `c` is on the left pinky, so Ctrl+C is same-finger with left Ctrl.
 
@@ -339,7 +339,7 @@ depends on W1's repeat-free diagnostics.
 just build
 just test
 just check
-cargo test --manifest-path shirolyzer/Cargo.toml --release -- --ignored
+cargo test --release -- --ignored
 just dev-tools
 ```
 

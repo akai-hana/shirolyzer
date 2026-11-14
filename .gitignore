@@ -1,5 +1,10 @@
-.*
-!.gitignore
+# Local environment and editor noise
+.venv/
+.opencode/
+.DS_Store
+*.swp
+*.swo
+*~
 
 # Python caches
 __pycache__/
@@ -16,21 +21,11 @@ corpora/*/resources/*/
 # Temporary corpus working directories
 corpora/*/tmp/
 corpora/*/.tmp/
-# Local generated outputs; curated layouts under layouts/<name>/ are tracked.
-/layouts/layout_*.txt
-/layouts/latest
-/layouts/generate_*
-/layouts/analysis*
-/layouts/audit_*
-/layouts/compute_*
-/layouts/preference_sweep_*
-/layouts/archive/
-/layouts/calibration/
-/layouts/fitting/
-/layouts/repeat-aware/
-/layouts/round8/
-/layouts/rust/
-/layouts/validation/
+
+# Generated layout artifacts. Curated layouts must be unignored explicitly.
+/layouts/*
+!/layouts/README.md
+!/layouts/shiro/
 
 # Rust build artifacts
-/target
+/target/

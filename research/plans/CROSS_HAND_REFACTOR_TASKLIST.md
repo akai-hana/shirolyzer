@@ -55,7 +55,7 @@ key hand.
 - [x] Record current `cargo test --release`, `check-baseline`, and benchmark
       results in the issue as the pre-refactor baseline.
 - [x] Decide the concrete 8-state token encoding and document it in
-      `shirolyzer/config/config.yaml` comments and `shirolyzer/README.md`.
+      `config/config.yaml` comments and `README.md`.
 - [x] Confirm whether `NF` stays a compile-time constant or becomes a derived
       constant; prefer compile-time `NF = 8` with named helpers.
 
@@ -65,7 +65,7 @@ Suggested commit: `cross-hand: capture pre-refactor baseline`
 
 Branch: `cross-hand/geometry`
 
-- [x] Add a `Finger`/`FingerHand` abstraction in `shirolyzer/src/geometry.rs`
+- [x] Add a `Finger`/`FingerHand` abstraction in `src/geometry.rs`
       (`FINGERS8`, `finger_hand`, `finger_index8`, etc.).
 - [x] Keep the existing same-hand `du`/`dv`/`reach` tables for same-hand
       fingers.
@@ -87,9 +87,9 @@ Branch: `cross-hand/config`
       index, while validating that the shipped default map remains same-hand.
 - [x] Change `AltRule::fingers` to 8-state indices.
 - [x] Relax hand validation only for `alt_fingers`; keep it for `fingermap`.
-- [x] Update the YAML parser and error messages in `shirolyzer/src/config.rs`.
-- [x] Mirror the same handling in `shirolyzer/utils/config.py` for parity.
-- [x] Update `shirolyzer/README.md` and the config comments with cross-hand
+- [x] Update the YAML parser and error messages in `src/config.rs`.
+- [x] Mirror the same handling in `utils/config.py` for parity.
+- [x] Update `README.md` and the config comments with cross-hand
       examples (for example H = `LI`, Y = `LM`).
 - [x] Add parser tests: same-hand default accepted, cross-hand alt accepted,
       invalid tokens rejected.
@@ -116,10 +116,10 @@ Suggested commit: `cross-hand: extend comfort model to eight finger states`
 
 Branch: `cross-hand/scorer`
 
-- [x] Update `shirolyzer/src/scorer.rs` `big_f`/`tri_f` encodings to 8-state
+- [x] Update `src/scorer.rs` `big_f`/`tri_f` encodings to 8-state
       indices.
 - [x] Update `Tables::build` and all delta tables used by `search`.
-- [x] Update `shirolyzer/tests/parity.rs` expected values only after the
+- [x] Update `tests/parity.rs` expected values only after the
       intended behavior is verified.
 - [x] Benchmark `Tables::build` and scoring; cross-hand must not cause an
       unacceptable regression.
@@ -130,7 +130,7 @@ Suggested commit: `cross-hand: encode eight-state fingerings in scorer tables`
 
 Branch: `cross-hand/analyzer`
 
-- [x] Update `shirolyzer/src/analyze.rs` to use the finger's hand for usage,
+- [x] Update `src/analyze.rs` to use the finger's hand for usage,
       SFB/SFT classification, and hand balance.
 - [x] Display selected fingerings with the full hand/finger token so H = LI is
       visible and not reported as H = RI.
@@ -159,14 +159,14 @@ Suggested commit: `cross-hand: integrate rules and search with eight states`
 
 Branch: `cross-hand/verify`
 
-- [x] `cargo test --release --manifest-path shirolyzer/Cargo.toml`
-- [x] `cargo fmt --manifest-path shirolyzer/Cargo.toml --check`
-- [x] `cargo clippy --manifest-path shirolyzer/Cargo.toml --all-targets -- -D warnings`
-- [x] `shirolyzer/target/release/shirolyzer check-baseline`
+- [x] `cargo test --release`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `target/release/shirolyzer check-baseline`
 - [x] `just dev-tools`
 - [x] Update `score_baseline.json` only for intentional score changes and
       document each one in the issue.
-- [x] Add a short "cross-hand alt-fingering" section to `shirolyzer/README.md`.
+- [x] Add a short "cross-hand alt-fingering" section to `README.md`.
 - [x] Close the issue with the final benchmark and test summary.
 
 Suggested commit: `cross-hand: verify, baseline, and document the refactor`
@@ -203,15 +203,15 @@ Suggested commit: `cross-hand: verify, baseline, and document the refactor`
 
 ## Relevant files
 
-- `shirolyzer/src/geometry.rs` — `NF`, rest/reach, `du`/`dv`, hand assumptions.
-- `shirolyzer/src/model.rs` — `pair_feature`, pair/trigram costs.
-- `shirolyzer/src/scorer.rs` — `Tables`, `big_f`/`tri_f`, deltas.
-- `shirolyzer/src/config.rs` — `fingermap`, `alt_fingers`, validation.
-- `shirolyzer/src/gates.rs` — alt-rule matching and penalties.
-- `shirolyzer/src/conditions.rs` — pair masks and geometric rules.
-- `shirolyzer/src/analyze.rs` — hand/finger usage and SFB/SFT classification.
-- `shirolyzer/src/audit.rs` — probes, rulings, and hard checks.
-- `shirolyzer/src/search.rs`, `shirolyzer/src/compute.rs` — state space and
+- `src/geometry.rs` — `NF`, rest/reach, `du`/`dv`, hand assumptions.
+- `src/model.rs` — `pair_feature`, pair/trigram costs.
+- `src/scorer.rs` — `Tables`, `big_f`/`tri_f`, deltas.
+- `src/config.rs` — `fingermap`, `alt_fingers`, validation.
+- `src/gates.rs` — alt-rule matching and penalties.
+- `src/conditions.rs` — pair masks and geometric rules.
+- `src/analyze.rs` — hand/finger usage and SFB/SFT classification.
+- `src/audit.rs` — probes, rulings, and hard checks.
+- `src/search.rs`, `src/compute.rs` — state space and
   delta tables.
-- `shirolyzer/tests/{baseline,commands,parity}.rs` — regression gates.
-- `shirolyzer/utils/` — Python development tooling and parity.
+- `tests/{baseline,commands,parity}.rs` — regression gates.
+- `utils/` — Python development tooling and parity.

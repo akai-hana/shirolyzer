@@ -14,12 +14,14 @@
 
 - [Introduction](#introduction)
     - [About 白ライザー](#about-白ライザー)
+    - [Repository layout](#repository-layout)
 - [Generation](#generation)
     - [Corpora](#corpora)
     - [Primary sacrifice](#primary-sacrifice)
     - [Apostrophe n-grams](#apostrophe-n-grams)
     - [Alt-fingers & Context](#alt-fingers--context)
     - [Generate scheduling](#generate-scheduling)
+    - [Per-layout artifact directories](#per-layout-artifact-directories)
     - [Polishing](#polishing)
     - [Terminal output](#terminal-output)
     - [Measuring variance](#measuring-variance)
@@ -47,11 +49,12 @@ Mainly, it features user-defined condition/preference/restriction configuration 
 
 **Physical layout and fingering**:
 
-- Physical layout geometry is defined in `geometry/*.yaml`; the config selects one:
+- Physical layout geometry is defined in `config/geometry/*.yaml`; the config selects one:
   ```yaml
   general:
     geometry: geometry/ansi.yaml
   ```
+  Relative paths are resolved from the `config/` directory.
 - Custom fingermap definition, using hand/finger tokens `LP/LR/LM/LI` and `RI/RM/RR/RP`.
 - Finger rest keys definition.
 - Alt-finger ngram rules that override the fingermap for specific physical-key sequences, including explicit cross-hand fingerings.
@@ -64,6 +67,20 @@ Mainly, it features user-defined condition/preference/restriction configuration 
 - Primary sacrifice limits, expressed as score and/or per-metric percentages.
 - Optional per-hand character restrictions (`hand_restrictions`), so selected characters are only placed on one hand during generation.
 - Priority tiers for selected objective terms and ranked redirect preference tiers.
+
+## Repository layout
+
+- `src/` — Rust runtime: CLI, model, search, analysis, and output.
+- `config/` — active configuration, geometry, fitted model parameters,
+  reference layouts, baselines, and experiment variants.
+- `corpora/` — parsed Shai and Douglas corpora with their parsers.
+- `layouts/` — generated layout artifacts; `layouts/shiro/` is the curated
+  shipped layout.
+- `research/` — findings, plans, and archived source material.
+- `tests/`, `benches/`, `examples/` — regression tests, the scoring benchmark,
+  and the fingering verifier.
+- `fitting/`, `utils/` — retained Python development tooling. The shipped
+  runtime is the Rust binary.
 
 ## Generation
 > shirolyzer's layout generation capabilities and specifications
@@ -241,6 +258,24 @@ Useful flags:
 - `--verbose` / `-v` — list every distinct layout from the anneal stage with its
   layout string instead of only the top eight.
 
+#### Per-layout artifact directories
+
+Pass `--layout <name>` to `generate` to create a self-contained artifact
+directory at `layouts/<name>/`. The generator writes:
+
+- `layout.txt` — the selected 30-character layout.
+- `generate.txt` / `generate.json` — the full generation record.
+- `analysis.txt` / `analysis.json` — the selected layout's analysis.
+- `config.yaml.bak` — the exact config snapshot used for the run.
+- `README.md` — a generated summary of the layout, scores, settings, and
+  reproduction command.
+- `xkb/<name>` / `xkb/install.sh` — XKB symbols and a per-layout installer.
+
+The directory name is slugged for the filesystem, so `--layout "my layout"`
+writes to `layouts/my_layout/`. `--name` is kept as an alias. Without
+`--layout`, output stays at the top level of `layouts/` as before. Generated
+layout directories are ignored by default; see `layouts/README.md`.
+
 #### Starting layouts
 
 Searches start from random layouts only. Known layouts are never used as warm
@@ -298,9 +333,10 @@ instead of being fixed:
 - **Best layout** — the selected layout drawn with the same staggered geometry as
   `render`, plus any other valid layouts alongside it.
 
-The footer lists the result files (`layouts/generate_*.{txt,json}`), the
-`layouts/latest` layout pointer, any layouts appended to the references file
-(named from `--name`, default `shiro`, plus the seed), and the elapsed time.
+The footer lists the result files (`layouts/generate_*.{txt,json}`, or
+`layouts/<name>/generate.*` with `--layout`), the `layouts/latest` layout
+pointer, any layouts appended to the references file (named from
+`--layout`/`--name`, or `shiro-<seed>` without one), and the elapsed time.
 Use `--append-references PATH` to write new references somewhere else.
 
 Progress bars are drawn on stderr, and only when it is a terminal. Color is used
@@ -598,7 +634,7 @@ The **shirolyzer** analyzer uses the same configuration, geometry, model, and fi
   terms, the separate finger-strength objective, gate penalties, and space
   costs.
 
-`analyze` uses the most recent `generate` result when `--layout` is omitted. The same metrics drive primary-sacrifice enforcement during secondary optimization, so scores shown by the analyzer reflect the constraints the generator applied.
+`analyze` uses the most recent `generate` result when the layout argument is omitted. The same metrics drive primary-sacrifice enforcement during secondary optimization, so scores shown by the analyzer reflect the constraints the generator applied.
 
 ### True same-finger metrics
 
@@ -733,17 +769,18 @@ to one JSON file. Search budget flags mirror `generate` (`--runs`, `--iters`,
 
 ### Tests and the reference model
 
-`just check` runs the tests, `cargo fmt --check` and `clippy`. The regression
+`just check` runs the tests, the Python development-tool import check,
+`cargo fmt --check`, and `clippy`. The regression
 baselines (`config/score_baseline.json`, the expected scores in `tests/`) measure
 a fixed reference model, not your live `config.yaml`. The tests build their
 config from `tests/fixtures/config.reference.yaml`, a frozen copy that uses
-`model/calibrated.json`, with cross-hand rules and hand restrictions stripped at
-test time.
+`config/model/calibrated.json`, with cross-hand rules and hand restrictions
+stripped at test time.
 
-Editing `config.yaml` or the priority tiers therefore never breaks
+Editing `config/config.yaml` or the priority tiers therefore never breaks
 the suite. Only change the fixture, and regenerate the baselines
-(`shirolyzer check-baseline --write`), when you deliberately change what the
-reference model measures.
+(`target/release/shirolyzer check-baseline --write`), when you deliberately
+change what the reference model measures.
 
 ---
 

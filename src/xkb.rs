@@ -1,6 +1,6 @@
 //! Generate XKB symbols files from a 30-character layout string.
 //!
-//! Port of `shirolyzer/utils/xkb.py`.
+//! Port of `utils/xkb.py`.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -145,7 +145,6 @@ pub fn symbols(layout: &str, name: &str) -> Result<String> {
     lines.push(String::new());
     Ok(lines.join("\n"))
 }
-
 
 pub const INSTALL_SCRIPT: &str = r#"#!/bin/sh
 # Apply this layout to the current X display.

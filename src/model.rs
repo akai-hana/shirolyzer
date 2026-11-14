@@ -1,6 +1,6 @@
 //! Pattern comfort model: parameters, key costs, pair costs, and trigram costs.
 //!
-//! Port of `shirolyzer/utils/comfort.py`.
+//! Port of `utils/comfort.py`.
 
 use std::collections::HashMap;
 use std::path::Path;
