@@ -194,6 +194,7 @@ pub struct Scales {
     pub scissor: f64,
     pub redirect: f64,
     pub roll: f64,
+    pub leap: f64,
     pub alt: f64,
     pub rest_penalty: f64,
     pub redirect_costs: Option<RedirectCostTable>,
@@ -211,6 +212,7 @@ impl Default for Scales {
             scissor: 1.0,
             redirect: 1.0,
             roll: 1.0,
+            leap: 1.0,
             alt: 1.0,
             rest_penalty: 0.0,
             redirect_costs: None,
@@ -554,7 +556,7 @@ impl Model {
                         parts.cross[i] = cross * self.scales.scissor;
                         parts.spread[i] = spread;
                         parts.roll[i] = roll * self.scales.roll;
-                        parts.leap[i] = leap * self.scales.roll;
+                        parts.leap[i] = leap * self.scales.leap;
                         parts.shift[i] = shift + waive;
                     }
                 }

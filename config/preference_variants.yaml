@@ -27,6 +27,18 @@
     roll_tiers:
       - ["1-2", "2-1"]
       - ["3-2"]
+- name: roll-scale-075
+  overrides:
+    roll_scale: 0.75
+- name: roll-scale-050
+  overrides:
+    roll_scale: 0.5
+- name: roll-scale-025
+  overrides:
+    roll_scale: 0.25
+- name: roll-off
+  overrides:
+    roll_scale: 0.0
 - name: sfs-125
   overrides:
     general.sfs_scale: 1.25

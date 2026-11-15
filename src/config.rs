@@ -226,7 +226,12 @@ pub struct Config {
     /// Extra multiplier on every redirect cost, applied on top of the
     /// `redirects` priority tier (1.0 = no change).
     pub redirect_scale: f64,
+    /// Extra multiplier on roll credits, applied after the `rolls` priority
+    /// tier (1.0 = no change). Leap penalties are not affected.
+    pub roll_scale: f64,
     pub roll_tiers: Option<RollTiers>,
+    /// Optional same-finger-skipgram tiers. Weights are multipliers on the
+    /// distance-dependent base SFS cost; unlisted patterns keep `1.0`.
     pub sfs_tiers: Option<SfsTiers>,
     pub scissor_tiers: Option<ScissorTiers>,
     pub finger_balance: HashMap<char, f64>,
@@ -255,7 +260,8 @@ impl Config {
                 } else {
                     self.redirect_scale
                 },
-            roll: m["rolls"],
+            roll: m["rolls"] * self.roll_scale,
+            leap: m["rolls"],
             alt: m["alternation"],
             rest_penalty: self.rest_penalty,
             redirect_costs: self.redirect_tiers.as_ref().map(RedirectTiers::cost_table),
@@ -281,7 +287,14 @@ impl Config {
             .iter()
             .flatten()
             .map(|name| {
-                if name == "redirects"
+                if name == "rolls" && self.roll_scale != 1.0 {
+                    format!(
+                        "{name} ×{:.1} (tier ×{:.1} · roll_scale ×{})",
+                        weights[name] * self.roll_scale,
+                        weights[name],
+                        self.roll_scale
+                    )
+                } else if name == "redirects"
                     && self
                         .redirect_tiers
                         .as_ref()
@@ -1683,6 +1696,7 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
             "redirect_tiers",
             "redirect_tier_weights",
             "redirect_scale",
+            "roll_scale",
             "roll_tiers",
             "sfs_tiers",
             "sfs_tier_weights",
@@ -1878,6 +1892,10 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
             "must be greater than 0 (to switch redirects off, leave them out of priority_list)",
         ));
     }
+    let roll_scale = match get(root, "roll_scale") {
+        Some(value) => as_number(&path, "roll_scale", value, Some(0.0), None)?,
+        None => 1.0,
+    };
     let redirect_tier_weights = parse_redirect_tier_weights(
         &path,
         get(root, "redirect_tier_weights"),
@@ -1942,6 +1960,7 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
         priority_list,
         redirect_tiers,
         redirect_scale,
+        roll_scale,
         roll_tiers,
         sfs_tiers,
         scissor_tiers,
@@ -2665,6 +2684,26 @@ mod cross_hand_tests {
         let weights = cfg.priority_multipliers();
         assert_eq!(cfg.scales().redirect, weights["redirects"]);
         assert!(cfg.priority_summary().contains("per-tier weights"));
+    }
+
+    #[test]
+    fn roll_scale_defaults_to_one_and_decouples_leap() {
+        let base = config_with("").unwrap();
+        assert_eq!(base.roll_scale, 1.0);
+        let scaled = config_with("roll_scale: 0.5\n").unwrap();
+        assert_eq!(scaled.roll_scale, 0.5);
+        assert!((scaled.scales().roll - base.scales().roll * 0.5).abs() < 1e-12);
+        assert_eq!(scaled.scales().leap, base.scales().leap);
+        assert!(scaled.priority_summary().contains("roll_scale ×0.5"));
+
+        let off = config_with("roll_scale: 0\n").unwrap();
+        assert_eq!(off.scales().roll, 0.0);
+        assert_eq!(off.scales().leap, base.scales().leap);
+
+        for bad in ["roll_scale: -1\n", "roll_scale: nope\n"] {
+            assert!(config_with(bad).is_err(), "{bad} should fail");
+        }
+        assert!(!base.priority_summary().contains("roll_scale"));
     }
 
     #[test]

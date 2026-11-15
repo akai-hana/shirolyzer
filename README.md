@@ -476,6 +476,7 @@ roll_tiers:
 - The unlisted direction bias scales with the weaker finger: index<->middle is a tie, ring->middle is slightly preferred over middle->ring, and pinky->ring is strongly preferred over ring->pinky.
 - This is a per-pair preference, not a redirect penalty: a redirect such as `1-2-1` still collects the credit of each pair it contains. To avoid redirects, use `redirect_tiers` and `redirect_tier_weights`.
 - `analyze` reports the share of letter bigrams in each tier and each pair (`roll_tier_N` and `roll_A_B` in the JSON).
+- `roll_scale` (top-level, default `1.0`) multiplies roll credits without scaling the separate leap penalty. Use it for controlled roll-priority sweeps; lowering `rolls` in `priority_list` still scales both rolls and leaps. See [`research/findings/roll_scale_experiment.md`](research/findings/roll_scale_experiment.md) for the roll-scale sweep and the residual redirect/SFS audit.
 
 ### Scissor tiers
 
