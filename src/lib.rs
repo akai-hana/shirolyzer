@@ -27,6 +27,7 @@ pub mod roll;
 pub mod scissor;
 pub mod scorer;
 pub mod search;
+pub mod sfs;
 pub mod ui;
 pub mod words;
 pub mod worst;

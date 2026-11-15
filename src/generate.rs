@@ -25,6 +25,7 @@ use crate::redirect::RedirectTiers;
 use crate::references;
 use crate::scorer::Tables;
 use crate::search;
+use crate::sfs::SfsTiers;
 use crate::ui;
 use crate::xkb;
 
@@ -63,6 +64,7 @@ struct Metrics {
 }
 
 impl Metrics {
+    #[allow(clippy::too_many_arguments)]
     fn evaluate(
         layout: &str,
         corpus: &Corpus,
@@ -71,9 +73,10 @@ impl Metrics {
         default_finger: &[usize; crate::geometry::NK],
         targets: &std::collections::HashMap<char, f64>,
         redirect_tiers: Option<&RedirectTiers>,
+        sfs_tiers: Option<&SfsTiers>,
     ) -> Self {
         let cat = category_report(layout, corpus, tables, geom);
-        let pats = trigram_patterns(layout, corpus, tables, geom, redirect_tiers);
+        let pats = trigram_patterns(layout, corpus, tables, geom, redirect_tiers, sfs_tiers);
         let true_metrics =
             crate::analyze::true_same_finger_metrics(layout, corpus, tables, default_finger);
         let usage = finger_usage(layout, corpus, tables, geom);
@@ -1359,6 +1362,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
                 &ctx.model.default_finger,
                 &ctx.cfg.finger_balance,
                 ctx.cfg.redirect_tiers.as_ref(),
+                ctx.cfg.sfs_tiers.as_ref(),
             )
         });
         let metric_limits = base_metrics
@@ -1376,6 +1380,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
                         &ctx.model.default_finger,
                         &ctx.cfg.finger_balance,
                         ctx.cfg.redirect_tiers.as_ref(),
+                        ctx.cfg.sfs_tiers.as_ref(),
                     ))
                 })
                 .unwrap_or(true)

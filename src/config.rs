@@ -14,6 +14,7 @@ use crate::paths;
 use crate::redirect::{is_turn, RedirectTiers};
 use crate::roll::{is_adjacent, RollTiers};
 use crate::scissor::{ScissorTiers, SCISSOR_BANDS};
+use crate::sfs::{is_sfs, SfsTiers};
 
 pub const PRIORITY_NAMES: [&str; 6] = [
     "sfbs-sfts",
@@ -226,6 +227,7 @@ pub struct Config {
     /// `redirects` priority tier (1.0 = no change).
     pub redirect_scale: f64,
     pub roll_tiers: Option<RollTiers>,
+    pub sfs_tiers: Option<SfsTiers>,
     pub scissor_tiers: Option<ScissorTiers>,
     pub finger_balance: HashMap<char, f64>,
     pub flat_share: HashMap<char, f64>,
@@ -258,6 +260,7 @@ impl Config {
             rest_penalty: self.rest_penalty,
             redirect_costs: self.redirect_tiers.as_ref().map(RedirectTiers::cost_table),
             roll_credits: self.roll_tiers.as_ref().map(RollTiers::credit_table),
+            sfs_tiers: self.sfs_tiers.as_ref().map(SfsTiers::table),
             scissor_tiers: self.scissor_tiers.as_ref().map(ScissorTiers::table),
         }
     }
@@ -292,6 +295,10 @@ impl Config {
                         weights[name],
                         self.redirect_scale
                     )
+                } else if name == "sfbs-sfts"
+                    && self.sfs_tiers.as_ref().is_some_and(SfsTiers::has_weights)
+                {
+                    format!("{name} ×{:.1} (sfs per-tier weights)", weights[name])
                 } else {
                     format!("{name} ×{:.1}", weights[name])
                 }
@@ -1197,6 +1204,111 @@ fn parse_redirect_tier_weights(
     Ok(Some(weights))
 }
 
+fn parse_sfs_tiers(path: &Path, value: Option<&Value>) -> Result<Option<SfsTiers>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let seq = value
+        .as_sequence()
+        .ok_or_else(|| fail(path, "sfs_tiers", "expected a non-empty list of tiers"))?;
+    if seq.is_empty() {
+        return Err(fail(
+            path,
+            "sfs_tiers",
+            "expected a non-empty list of tiers",
+        ));
+    }
+    let mut seen = HashSet::new();
+    let mut tiers = Vec::new();
+    for (i, item) in seq.iter().enumerate() {
+        let where_i = format!("sfs_tiers[{}]", i);
+        let patterns = item
+            .as_sequence()
+            .ok_or_else(|| fail(path, &where_i, "expected a non-empty list of SFS patterns"))?;
+        if patterns.is_empty() {
+            return Err(fail(
+                path,
+                &where_i,
+                "expected a non-empty list of SFS patterns",
+            ));
+        }
+        let mut tier = Vec::new();
+        for (j, item) in patterns.iter().enumerate() {
+            let where_j = format!("{}[{}]", where_i, j);
+            let text = as_string(path, &where_j, item)?;
+            let pattern = parse_redirect_pattern(path, &where_j, &text)?;
+            if !is_sfs(pattern) {
+                return Err(fail(
+                    path,
+                    &where_j,
+                    &format!(
+                        "{text:?} is not an SFS (the first and third finger must match, for example 1-2-1)"
+                    ),
+                ));
+            }
+            if !seen.insert(pattern) {
+                return Err(fail(
+                    path,
+                    &where_j,
+                    &format!("duplicate SFS pattern {text:?}"),
+                ));
+            }
+            tier.push(pattern);
+        }
+        tiers.push(tier);
+    }
+    Ok(Some(SfsTiers::new(tiers)))
+}
+
+fn parse_sfs_tier_weights(
+    path: &Path,
+    value: Option<&Value>,
+    tier_count: Option<usize>,
+) -> Result<Option<Vec<f64>>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let Some(tier_count) = tier_count else {
+        return Err(fail(path, "sfs_tier_weights", "requires sfs_tiers"));
+    };
+    let seq = value.as_sequence().ok_or_else(|| {
+        fail(
+            path,
+            "sfs_tier_weights",
+            "expected one non-negative multiplier per SFS tier",
+        )
+    })?;
+    if seq.len() != tier_count {
+        return Err(fail(
+            path,
+            "sfs_tier_weights",
+            &format!(
+                "expected {tier_count} multipliers (one per SFS tier), got {}",
+                seq.len()
+            ),
+        ));
+    }
+    let mut weights = Vec::with_capacity(seq.len());
+    for (i, item) in seq.iter().enumerate() {
+        let weight = as_number(
+            path,
+            &format!("sfs_tier_weights[{i}]"),
+            item,
+            Some(0.0),
+            None,
+        )?;
+        weights.push(weight);
+    }
+    if weights.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(fail(
+            path,
+            "sfs_tier_weights",
+            "must increase strictly from the best tier to the worst",
+        ));
+    }
+    Ok(Some(weights))
+}
+
 fn parse_roll_pair(path: &Path, where_: &str, text: &str) -> Result<[u8; 2]> {
     let parts: Vec<&str> = text.split('-').collect();
     if parts.len() != 2 {
@@ -1572,6 +1684,8 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
             "redirect_tier_weights",
             "redirect_scale",
             "roll_tiers",
+            "sfs_tiers",
+            "sfs_tier_weights",
             "scissor_tiers",
             "finger_strength",
             "finger_balance_source",
@@ -1783,6 +1897,16 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
         redirect_tiers = Some(RedirectTiers::with_weights(tiers.tiers().to_vec(), weights));
     }
     let roll_tiers = parse_roll_tiers(&path, get(root, "roll_tiers"))?;
+    let mut sfs_tiers = parse_sfs_tiers(&path, get(root, "sfs_tiers"))?;
+    let sfs_tier_weights = parse_sfs_tier_weights(
+        &path,
+        get(root, "sfs_tier_weights"),
+        sfs_tiers.as_ref().map(SfsTiers::len),
+    )?;
+    if let Some(weights) = sfs_tier_weights {
+        let tiers = sfs_tiers.take().expect("weights parser requires sfs tiers");
+        sfs_tiers = Some(SfsTiers::with_weights(tiers.tiers().to_vec(), weights));
+    }
     let scissor_tiers = parse_scissor_tiers(&path, get(root, "scissor_tiers"))?;
     let (finger_balance, flat_share) = parse_balance(&path, get(root, "finger_balance"))?;
     let finger_strength = parse_finger_strength(&path, get(root, "finger_strength"))?;
@@ -1819,6 +1943,7 @@ pub fn load(path: Option<&Path>) -> Result<Config> {
         redirect_tiers,
         redirect_scale,
         roll_tiers,
+        sfs_tiers,
         scissor_tiers,
         finger_balance,
         flat_share,
@@ -2180,6 +2305,100 @@ mod cross_hand_tests {
         assert_eq!(table.credit([2, 1]), None);
         cfg.roll_tiers = None;
         assert!(cfg.scales().roll_credits.is_none());
+    }
+
+    fn sfs(yaml: &str) -> Result<Option<SfsTiers>> {
+        let value: Value = serde_yaml::from_str(yaml).unwrap();
+        parse_sfs_tiers(Path::new("config.yaml"), Some(&value))
+    }
+
+    #[test]
+    fn sfs_tiers_are_optional() {
+        let parsed = parse_sfs_tiers(Path::new("config.yaml"), None).unwrap();
+        assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn sfs_tiers_accept_the_documented_shape() {
+        let parsed = sfs(r#"
+- ["1-2-1"]
+- ["2-1-2", "4-3-4", "1-1-1"]
+"#)
+        .unwrap()
+        .unwrap();
+        assert_eq!(parsed.tiers()[0], vec![[1, 2, 1]]);
+        assert_eq!(parsed.tiers()[1], vec![[2, 1, 2], [4, 3, 4], [1, 1, 1]]);
+        assert_eq!(parsed.tier_of([4, 3, 4]), Some(1));
+        assert_eq!(parsed.tier_of([1, 1, 1]), Some(1));
+        assert_eq!(parsed.tier_of([1, 3, 1]), None);
+    }
+
+    #[test]
+    fn sfs_tiers_reject_malformed_entries() {
+        for yaml in [
+            "[]",
+            "- []",
+            "- [1, 2, 1]",
+            r#"- ["1-2"]"#,
+            r#"- ["1-2-3-4"]"#,
+            r#"- ["1-2-a"]"#,
+            r#"- ["0-2-1"]"#,
+            r#"- ["5-2-1"]"#,
+            r#"- ["01-2-1"]"#,
+            r#"- ["1-2-1", "1-2-1"]"#,
+            "- [\"1-2-1\"]\n- [\"1-2-1\"]",
+            r#"- ["1-2-3"]"#,
+            r#"- ["1-2-2"]"#,
+        ] {
+            assert!(sfs(yaml).is_err(), "{yaml} should fail");
+        }
+    }
+
+    #[test]
+    fn sfs_weights_are_optional_and_must_match_tiers() {
+        let tiers = sfs("- [\"1-2-1\"]\n- [\"4-3-4\"]").unwrap();
+        let parse = |yaml: &str| {
+            let value: Value = serde_yaml::from_str(yaml).unwrap();
+            parse_sfs_tier_weights(
+                Path::new("config.yaml"),
+                Some(&value),
+                tiers.as_ref().map(SfsTiers::len),
+            )
+        };
+        assert_eq!(parse("[0.75, 1.75]").unwrap(), Some(vec![0.75, 1.75]));
+        assert!(parse("[0.5]")
+            .unwrap_err()
+            .to_string()
+            .contains("expected 2"));
+        for bad in [
+            "[]",
+            "[0.75]",
+            "[0.75, 1.75, 2.0]",
+            "[-0.1, 1.0]",
+            "[1.5, 1.0]",
+            "[0.75, x]",
+        ] {
+            assert!(parse(bad).is_err(), "{bad} should fail");
+        }
+        let value: Value = serde_yaml::from_str("[0.75, 1.75]").unwrap();
+        assert!(parse_sfs_tier_weights(Path::new("config.yaml"), Some(&value), None).is_err());
+    }
+
+    #[test]
+    fn sfs_tiers_reach_the_model_scales_and_summary() {
+        let mut cfg = load(None).unwrap();
+        cfg.sfs_tiers = Some(SfsTiers::with_weights(
+            vec![vec![[1, 2, 1]], vec![[4, 3, 4]]],
+            vec![0.75, 1.75],
+        ));
+        let table = cfg.scales().sfs_tiers.expect("sfs tiers");
+        assert_eq!(table.multiplier([1, 2, 1]), Some(0.75));
+        assert_eq!(table.multiplier([4, 3, 4]), Some(1.75));
+        assert_eq!(table.multiplier([2, 1, 2]), None);
+        assert!(cfg.priority_summary().contains("sfs per-tier weights"));
+        cfg.sfs_tiers = None;
+        assert!(cfg.scales().sfs_tiers.is_none());
+        assert!(!cfg.priority_summary().contains("sfs per-tier weights"));
     }
 
     fn scissors(yaml: &str) -> Result<Option<ScissorTiers>> {

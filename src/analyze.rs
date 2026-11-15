@@ -21,6 +21,10 @@ use crate::provenance;
 use crate::redirect::{pattern_for, pattern_key, pattern_label, redirect_cost, RedirectTiers};
 use crate::roll::{self, pair_key, pair_label};
 use crate::scorer::{Tables, FINGER_SLOTS, SPACE_EFFORT, SPACE_FINGER, SPACE_ID};
+use crate::sfs::{
+    pattern_for as sfs_pattern_for, pattern_key as sfs_pattern_key,
+    pattern_label as sfs_pattern_label, SfsTiers,
+};
 
 const LETTERS: &str = "abcdefghijklmnopqrstuvwxyz";
 const FORDER: [usize; 4] = [0, 1, 2, 3];
@@ -276,11 +280,14 @@ fn add_trigram_terms(
         && finger_hand(fa) == finger_hand(fc)
         && a != c;
     if m13 {
-        let sfs = if geom.distance(a, c) <= 1.3 {
+        let base = if geom.distance(a, c) <= 1.3 {
             W_SFS_1U
         } else {
             W_SFS_FAR
-        } * model.scales.sfb
+        };
+        let sfs = base
+            * crate::sfs::multiplier(model.scales.sfs_tiers.as_ref(), [fa, fb, fc])
+            * model.scales.sfb
             * model.scales.sfs;
         out.trigram_sfs += sfs * count;
     }
@@ -725,12 +732,25 @@ pub fn true_same_finger_metrics(
     out
 }
 
+fn sfs_tier_bucket(
+    fs: [usize; 3],
+    distinct: bool,
+    tiers: &SfsTiers,
+) -> Option<(Option<usize>, String)> {
+    if !distinct {
+        return None;
+    }
+    let pattern = sfs_pattern_for(fs)?;
+    Some((tiers.tier_of(pattern), sfs_pattern_key(pattern)))
+}
+
 pub fn trigram_patterns(
     layout: &str,
     corpus: &crate::corpus::Corpus,
     tables: &Tables,
     _geom: &crate::geometry::Geometry,
     tiers: Option<&RedirectTiers>,
+    sfs_tiers: Option<&SfsTiers>,
 ) -> HashMap<String, f64> {
     let m = keymap(layout);
     let mut acc: HashMap<String, f64> = HashMap::new();
@@ -755,6 +775,18 @@ pub fn trigram_patterns(
         add(&mut acc, pat.category);
         if is_same_finger_skipgram(fs) {
             add(&mut acc, "sfs");
+            let distinct = ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2];
+            if let Some(tiers) = sfs_tiers {
+                if let Some((tier, key)) = sfs_tier_bucket(fs, distinct, tiers) {
+                    match tier {
+                        Some(tier) => {
+                            add(&mut acc, &format!("sfs_tier_{}", tier + 1));
+                            add(&mut acc, &key);
+                        }
+                        None => add(&mut acc, "sfs_unlisted"),
+                    }
+                }
+            }
         }
         if let Some(redirect) = pat.redirect {
             match pat.tier {
@@ -1246,6 +1278,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
                         &ctx.tables,
                         &ctx.geom,
                         ctx.cfg.redirect_tiers.as_ref(),
+                        ctx.cfg.sfs_tiers.as_ref(),
                     )
                 },
                 || {
@@ -1527,6 +1560,33 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         ));
         out("  note: redirect/redirect_weak are deprecated legacy labels".to_string());
     }
+    if let Some(tiers) = ctx.cfg.sfs_tiers.as_ref() {
+        out(String::new());
+        out("== SFS tiers (configured, % of trigrams) ==".to_string());
+        for (i, tier) in tiers.tiers().iter().enumerate() {
+            out(format!(
+                "  {:<16} {:6.2}  multiplier={:.3}",
+                format!("tier {}", i + 1),
+                pats.get(&format!("sfs_tier_{}", i + 1))
+                    .copied()
+                    .unwrap_or(0.0),
+                tiers.base_multiplier(i)
+            ));
+            for &pattern in tier {
+                out(format!(
+                    "    {:<14} {:6.2}",
+                    sfs_pattern_label(pattern),
+                    pats.get(&sfs_pattern_key(pattern)).copied().unwrap_or(0.0)
+                ));
+            }
+        }
+        out(format!(
+            "  {:<16} {:6.2}",
+            "unlisted",
+            pats.get("sfs_unlisted").copied().unwrap_or(0.0)
+        ));
+        out("  note: repeat-free SFS only (same set as sfs_true); weights multiply the distance-dependent base cost; unlisted patterns keep ×1.0".to_string());
+    }
     out(String::new());
     out("== finger load (% of all strokes) ==".to_string());
     for h in ['L', 'R'] {
@@ -1790,6 +1850,7 @@ mod tests {
         classify_trigram, is_same_finger_skipgram, trigram_pattern, true_same_finger_metrics,
     };
     use crate::redirect::RedirectTiers;
+    use crate::sfs::SfsTiers;
 
     fn fingers(pattern: [u8; 3], hand: usize) -> [usize; 3] {
         pattern.map(|rank| hand * 4 + (4 - rank) as usize)
@@ -1915,6 +1976,21 @@ mod tests {
     }
 
     #[test]
+    fn sfs_tier_reporting_skips_repeated_keys() {
+        let tiers = SfsTiers::with_weights(vec![vec![[1, 2, 1]]], vec![1.0]);
+        assert_eq!(super::sfs_tier_bucket([3, 6, 3], false, &tiers), None);
+        assert_eq!(
+            super::sfs_tier_bucket([3, 6, 3], true, &tiers),
+            Some((Some(0), "sfs_1_2_1".to_string()))
+        );
+        assert_eq!(
+            super::sfs_tier_bucket([3, 1, 3], true, &tiers),
+            Some((None, "sfs_1_3_1".to_string()))
+        );
+        assert_eq!(super::sfs_tier_bucket([3, 3, 6], true, &tiers), None);
+    }
+
+    #[test]
     fn true_metrics_are_repeat_free_on_the_shipped_layout() {
         let ctx = crate::context::Context::load(None).expect("context");
         let (corpus, _) = crate::context::load_role(&ctx.cfg, "primary").expect("corpus");
@@ -1925,6 +2001,7 @@ mod tests {
             &ctx.tables,
             &ctx.geom,
             ctx.cfg.redirect_tiers.as_ref(),
+            ctx.cfg.sfs_tiers.as_ref(),
         );
         let metrics =
             true_same_finger_metrics(layout, &corpus, &ctx.tables, &ctx.model.default_finger);

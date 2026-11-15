@@ -369,6 +369,24 @@ redirect_tier_weights: [0.0, 0.05, 0.10, 2.0, 3.5, 5.0]
 roll_tiers:
   - ["1-2", "2-1"]
 
+# Optional SFS finger-pattern tiers.  An SFS is a triple whose first and third
+# physical fingers match; the middle finger differs or is the same finger type
+# on the other hand (for example "1-2-1" or "1-1-1").  The repeated outer
+# finger fixes the hand; a cross-hand middle alt contributes its finger rank.
+# Patterns use per-hand ranks 1=index, 2=middle, 3=ring, 4=pinky.
+# `sfs_tier_weights` are multipliers on the distance-dependent base SFS cost,
+# not absolute costs, and must increase strictly from the best tier to the
+# worst.  Unlisted patterns keep a multiplier of 1.0.  The shipped config
+# leaves this unset, so the fitted near/far SFS cost is unchanged.  Experiment
+# with a complete table:
+# sfs_tiers:
+#   - ["1-2-1"]
+#   - ["2-1-2", "2-3-2", "3-2-3", "1-1-1", "2-2-2"]
+#   - ["1-3-1", "3-1-3"]
+#   - ["1-4-1", "4-1-4", "2-4-2", "4-2-4", "3-3-3"]
+#   - ["3-4-3", "4-3-4", "4-4-4"]
+# sfs_tier_weights: [0.8, 1.0, 1.2, 1.6, 2.0]
+
 # Scissor severity bands, mild to extreme.  Each band's multiplier scales the
 # pair strain before the `scissors` priority is applied.  Bands are defined by
 # base strain thresholds: mild < 3, moderate < 5, severe < 8, extreme >= 8.

@@ -442,6 +442,25 @@ The current ordering is a user preference rather than a swept optimum: the first
 
 `redirect_scale` is the legacy global multiplier (default `1.0`) and still works when `redirect_tier_weights` is absent, preserving old configs. It cannot be combined with per-tier weights. With the old tier curve it applied the calibrated `W_REDIRECT`–`W_REDIRECT_WEAK` endpoints evenly; the shipped config now uses explicit weights instead.
 
+### SFS tiers
+
+`sfs_tiers` ranks same-finger skipgrams (SFS) from most preferred to most avoided. An SFS is a triple whose first and third physical fingers match; the middle finger differs, such as `1-2-1`. The repeated outer finger fixes the hand; flexible fingering may put the middle key on the other hand, and its rank still describes the finger type. Patterns use the same per-hand numbering as `redirect_tiers` (`1=index`, `2=middle`, `3=ring`, `4=pinky`).
+
+```yaml
+sfs_tiers:
+  - ["1-2-1"]                                      # index-middle-index
+  - ["2-1-2", "2-3-2", "3-2-3", "1-1-1", "2-2-2"]  # adjacent; cross-hand index/middle
+  - ["1-3-1", "3-1-3"]                             # index-ring
+  - ["1-4-1", "4-1-4", "2-4-2", "4-2-4", "3-3-3"]  # pinky; cross-hand ring
+  - ["3-4-3", "4-3-4", "4-4-4"]                    # ring-pinky; cross-hand pinky
+
+sfs_tier_weights: [0.8, 1.0, 1.2, 1.6, 2.0]
+```
+
+`sfs_tier_weights` are **multipliers**, not absolute costs. They scale the existing distance-dependent base SFS cost (`2.5` near, `3.5` far), so the near/far distinction is preserved. The `sfbs-sfts` priority and `general.sfs_scale` still apply on top. Weights must increase strictly from the best tier to the worst. Unlisted patterns keep a multiplier of `1.0`; unlike `redirect_tier_weights`, the last tier is not an unlisted fallback. When the weights are omitted, the default multipliers span `1.0` at the best tier to `2.0` at the worst tier.
+
+This table covers all 16 possible rank patterns. It is an experiment starting point, not part of the shipped config. The four same-rank triples (`1-1-1`, `2-2-2`, `3-3-3`, `4-4-4`) describe a cross-hand middle of the same finger type; three presses of one physical finger are a same-finger trigram and never reach this classifier. `analyze` reports repeat-free per-tier and per-pattern SFS shares (`sfs_tier_N` and `sfs_A_B_C` in the JSON) plus `sfs_unlisted` when a pattern is absent from the table; these use the same set as `sfs_true`. The legacy `sfs` category still includes repeated keys.
+
 ### Roll tiers
 
 `roll_tiers` ranks directed same-hand finger pairs from the most to the least rewarded roll. A pair is `"from-to"` in the same per-hand numbering as the redirect tiers (`1=index`, `2=middle`, `3=ring`, `4=pinky`), so `"1-2"` is index then middle and `"2-1"` is middle then index. Only neighbouring fingers can roll.

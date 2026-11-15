@@ -66,6 +66,7 @@ fn trigram_categories_are_exclusive_and_repeats_overlap() {
         &tables,
         &geom,
         _cfg.redirect_tiers.as_ref(),
+        _cfg.sfs_tiers.as_ref(),
     );
 
     let sft = pats.get("sft").copied().unwrap_or(0.0);

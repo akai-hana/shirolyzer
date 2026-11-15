@@ -14,6 +14,7 @@ use crate::geometry::{
 use crate::redirect::{redirect_cost, RedirectCostTable};
 use crate::roll::RollCreditTable;
 use crate::scissor::ScissorTierTable;
+use crate::sfs::SfsTierTable;
 
 pub const PARAM_NAMES: [&str; 47] = [
     "e_dn",
@@ -197,6 +198,7 @@ pub struct Scales {
     pub rest_penalty: f64,
     pub redirect_costs: Option<RedirectCostTable>,
     pub roll_credits: Option<RollCreditTable>,
+    pub sfs_tiers: Option<SfsTierTable>,
     pub scissor_tiers: Option<ScissorTierTable>,
 }
 
@@ -213,6 +215,7 @@ impl Default for Scales {
             rest_penalty: 0.0,
             redirect_costs: None,
             roll_credits: None,
+            sfs_tiers: None,
             scissor_tiers: None,
         }
     }
@@ -725,8 +728,7 @@ impl Model {
             let kb = b[i];
             let kc = c[i];
             let d_ac = geom.distance(ka, kc);
-            let sfs =
-                if d_ac <= 1.3 { W_SFS_1U } else { W_SFS_FAR } * self.scales.sfb * self.scales.sfs;
+            let sfs_base = if d_ac <= 1.3 { W_SFS_1U } else { W_SFS_FAR };
             for f1 in 0..NF {
                 for f2 in 0..NF {
                     for f3 in 0..NF {
@@ -771,6 +773,13 @@ impl Model {
                             && finger_hand(f1) == finger_hand(f3)
                             && ka != kc;
                         if m13 {
+                            let sfs = sfs_base
+                                * crate::sfs::multiplier(
+                                    self.scales.sfs_tiers.as_ref(),
+                                    [f1, f2, f3],
+                                )
+                                * self.scales.sfb
+                                * self.scales.sfs;
                             cost += sfs;
                         }
                         let bad = (ka == kb && f1 != f2)
