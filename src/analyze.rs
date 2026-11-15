@@ -1091,13 +1091,17 @@ pub struct ShortcutRow {
     pub default: usize,
     pub ctrl_same_hand: bool,
     pub ctrl_same_finger: bool,
+    /// A pinky-key shortcut can use the ring finger of the key's hand instead.
+    pub ctrl_ring_alt: bool,
 }
 
 /// Report-only check for one-handed left-Ctrl shortcuts.
 ///
 /// Left Ctrl is treated as left-pinky (`LP`). The chosen finger is the most
 /// frequent DP finger for the letter; the default finger comes from the
-/// configured fingermap.
+/// configured fingermap. A shortcut key that lands on a pinky physical key is
+/// not counted as a same-finger conflict, because it can be pressed with that
+/// hand's ring finger instead.
 pub fn shortcut_report(
     layout: &str,
     guide: &HashMap<char, GuideEntry>,
@@ -1113,6 +1117,8 @@ pub fn shortcut_report(
                 .get(&letter)
                 .and_then(|entry| entry.share.first().copied())
                 .unwrap_or((default, 0.0));
+            let pinky_key = default == 0 || default == 4;
+            let ctrl_ring_alt = pinky_key && chosen == 0;
             Some(ShortcutRow {
                 letter,
                 key: KEYS[key].to_string(),
@@ -1125,7 +1131,8 @@ pub fn shortcut_report(
                 chosen_share,
                 default,
                 ctrl_same_hand: finger_hand(chosen) == 0,
-                ctrl_same_finger: chosen == 0,
+                ctrl_same_finger: chosen == 0 && !ctrl_ring_alt,
+                ctrl_ring_alt,
             })
         })
         .collect()
@@ -1609,7 +1616,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
     out("== shortcut constraints (left Ctrl + key) ==".to_string());
     for row in &shortcuts {
         out(format!(
-            "  {}  key={:<2} hand={:<5} chosen={:<2} ({:5.1}%)  default={:<2}  same_hand={:<3}  same_finger={}",
+            "  {}  key={:<2} hand={:<5} chosen={:<2} ({:5.1}%)  default={:<2}  same_hand={:<3}  ring_alt={:<3}  same_finger={}",
             row.letter,
             row.key,
             row.hand,
@@ -1617,6 +1624,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             row.chosen_share,
             finger_label(row.default),
             if row.ctrl_same_hand { "yes" } else { "no" },
+            if row.ctrl_ring_alt { "yes" } else { "no" },
             if row.ctrl_same_finger { "yes" } else { "no" },
         ));
     }
@@ -1788,6 +1796,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
                     "chosen_share": row.chosen_share,
                     "default": finger_label(row.default),
                     "ctrl_same_hand": row.ctrl_same_hand,
+                    "ctrl_ring_alt": row.ctrl_ring_alt,
                     "ctrl_same_finger": row.ctrl_same_finger,
                 }),
             )

@@ -639,12 +639,15 @@ The **shirolyzer** analyzer uses the same configuration, geometry, model, and fi
 - trigram patterns including rolls, redirects, alternation, and the repeat-free true same-finger diagnostics `sfb_true`, `sft_true`, `sfb_sft_true`, and `sfs_true`; repeats are reported separately as `repeat_adjacent`, `repeat_skip`, and `repeat_all`;
 - the legacy `sft`, `sfb_tri`, `sfb_sft`, and `sfs` values, shown as `legacy_*` in the text report; they retain their budget meaning but include repeated physical keys and are not conventional same-finger comparisons;
 - when `redirect_tiers` is configured, per-tier and per-pattern redirect percentages plus `redirect_unclassified` for unlisted turns; the older `redirect`/`redirect_weak` categories remain as deprecated overlapping diagnostics;
+- when `sfs_tiers` is configured, repeat-free per-tier and per-pattern SFS percentages plus `sfs_unlisted` for unlisted patterns;
 - when `roll_tiers` is configured, the share of letter bigrams in each roll tier and pair; the six directed pair shares (`roll_1_2` ... `roll_4_3`) are always in the JSON;
 - per-finger usage against the configured finger-balance targets, plus the
   frequency-weighted strength cost of the top letters, bigrams, and trigrams;
 - a report-only Ctrl shortcut check for `z, x, c, v, t, y`: the physical key,
-  hand, chosen and default finger, and whether left Ctrl (treated as LP) plus
-  that key is same-hand or same-finger;
+  hand, chosen and default finger, ring-alt availability, and whether left
+  Ctrl (treated as LP) plus that key is same-hand or same-finger. A shortcut
+  on a pinky physical key can use that hand's ring finger, so it is not counted
+  as a same-finger conflict;
 - a report-only human-factors section: cross-hand alt shares and contexts,
   dead punctuation keys, the unmodeled apostrophe, shifted symbols, and common
   punctuation bigrams;

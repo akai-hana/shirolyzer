@@ -134,6 +134,7 @@ fn analyze_score_matches_baseline() {
         assert!(row["chosen"].is_string(), "{letter} chosen");
         assert!(row["default"].is_string(), "{letter} default");
         assert!(row["ctrl_same_hand"].is_boolean(), "{letter} same_hand");
+        assert!(row["ctrl_ring_alt"].is_boolean(), "{letter} ring_alt");
         assert!(row["ctrl_same_finger"].is_boolean(), "{letter} same_finger");
         assert!(
             row["ctrl_same_hand"].as_bool().unwrap(),
@@ -177,6 +178,32 @@ fn analyze_score_matches_baseline() {
         assert_eq!(entry["combined_sha1"].as_str().unwrap().len(), 40);
         assert!(entry["totals"]["trigram_entries"].as_u64().unwrap() > 0);
     }
+}
+
+#[test]
+fn shortcut_report_allows_ring_alt_on_pinky_keys() {
+    let config = config_path();
+    let path = tmp("shortcut-ring-alt.json");
+    let layout = "ftrhcguenbsmld'oawpivqxyz,.kj/";
+    let out = run(&[
+        "analyze",
+        layout,
+        "--config",
+        config.as_str(),
+        "--out-json",
+        path.to_str().unwrap(),
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let v = &value["shortcuts"]["v"];
+    assert_eq!(v["key"], "Z");
+    assert_eq!(v["default"], "LP");
+    assert_eq!(v["ctrl_ring_alt"], true);
+    assert_eq!(v["ctrl_same_finger"], false);
 }
 
 #[test]
