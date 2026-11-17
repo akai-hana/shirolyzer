@@ -93,6 +93,8 @@ On layout generation, it is capable of taking corpora under different weightings
 
 - **Secondary:** Any number of corpora can optionally be evaluated _after_ the initial generation ("a posteriori"). The generator then optimizes for the secondary corpora without exceeding the allowed primary sacrifice.
 
+Parsed corpora may include a literal space character in their n-grams. Space is scored as an implicit thumb key consistently by `generate`, `analyze`'s primary score, and the score breakdown; raw text sources currently split runs at non-letters, so they do not produce space n-grams.
+
 ### Primary sacrifice
 
 `general.primary_sacrifice` accepts either a number/percentage (score only) or a mapping:

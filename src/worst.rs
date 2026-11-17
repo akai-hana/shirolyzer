@@ -9,7 +9,7 @@ use crate::context;
 use crate::corpus::SPACE_INDEX;
 use crate::geometry::{finger_token, key_index, KEYS};
 use crate::paths;
-use crate::scorer::{big_idx, tri_idx, FINGER_SLOTS, SPACE_FINGER};
+use crate::scorer::{big_idx, tri_idx, FINGER_SLOTS, SPACE_FINGER, SPACE_ID};
 
 const LETTERS: usize = 26;
 
@@ -36,6 +36,7 @@ fn keymap(layout: &str) -> [Option<usize>; LETTERS + 1] {
             map[id] = Some(key);
         }
     }
+    map[SPACE_INDEX] = Some(SPACE_ID);
     map
 }
 
