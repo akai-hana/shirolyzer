@@ -118,6 +118,30 @@ fn space_trigrams_are_scored_consistently() {
 }
 
 #[test]
+fn balance_guard_is_off_without_a_configured_balance_weight() {
+    let (cfg, _geom, tables, corpus) = setup();
+    assert_eq!(cfg.balance_weights(), (0.0, 0.0));
+    let shipped = config::load(None).expect("shipped config");
+    assert!(shipped.balance_weights().0 > 0.0);
+
+    let model = config::build_model(&cfg).expect("model");
+    let flat = evaluate::flat_share_from_config(&cfg);
+    let mut usage = [[0.25; 4]; 2];
+    usage[0][0] = 0.0;
+    usage[0][1] = 0.30;
+    usage[0][2] = 0.35;
+    usage[0][3] = 0.35;
+
+    let off = evaluate::Evaluator::new(&corpus, &tables, &model, &cfg.punctuation, flat, 0.0, 0.0)
+        .expect("evaluator");
+    assert_eq!(off.penalty_from_usage(&usage), 0.0);
+
+    let on = evaluate::Evaluator::new(&corpus, &tables, &model, &cfg.punctuation, flat, 0.4, 0.5)
+        .expect("evaluator");
+    assert!(on.penalty_from_usage(&usage) > 1.0);
+}
+
+#[test]
 fn trigram_categories_are_exclusive_and_repeats_overlap() {
     let (_cfg, geom, tables, corpus) = setup();
     let pats = shirolyzer::analyze::trigram_patterns(

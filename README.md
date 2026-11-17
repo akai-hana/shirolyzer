@@ -567,8 +567,10 @@ strength contribution separately in `score_breakdown.finger_strength`. The
 separate `rest_penalty` preference is included in `key_effort`.
 
 `finger_balance` is demoted to a tie-breaker tier. It is not a primary goal,
-but a guardrail keeps every finger from being ignored: usage below half of its
-configured target receives an additional penalty.
+but when it is enabled a guardrail keeps every finger from being ignored:
+usage below half of its configured target receives an additional penalty. The
+guardrail is part of the balance objective, so it is off when `finger_balance`
+is omitted from `priority_list`.
 
 ### Preference calibration
 
