@@ -66,6 +66,42 @@ fn xkb_matches_reference() {
 }
 
 #[test]
+fn commands_reject_invalid_layouts_with_named_errors() {
+    let config = config_path();
+    for (layout, needle) in [
+        ("aacdefghijklmnopqrstuvwxyz',./", "repeats letter 'a'"),
+        (
+            "Abcdefghijklmnopqrstuvwxyz',./",
+            "unsupported character 'A'",
+        ),
+        ("ébcdefghijklmnopqrstuvwxyz',./", "non-ASCII character 'é'"),
+    ] {
+        let out = run(&["analyze", layout, "--config", config.as_str()]);
+        assert!(!out.status.success(), "{layout} was accepted");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains(needle), "{layout}: {err}");
+        assert!(!err.contains("panicked"), "{layout}: {err}");
+    }
+
+    let wordlist = tmp("invalid-layout-words.txt");
+    std::fs::write(&wordlist, "we 100\nthe 200\n").unwrap();
+    for command in ["analyze", "worst", "words"] {
+        let mut args = vec![command, "aacdefghijklmnopqrstuvwxyz',./", "--config"];
+        args.push(config.as_str());
+        if command == "words" {
+            args.extend(["--wordlist", wordlist.to_str().unwrap()]);
+        }
+        let out = run(&args);
+        assert!(
+            !out.status.success(),
+            "{command} accepted a duplicate letter"
+        );
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("repeats letter 'a'"), "{command}: {err}");
+    }
+}
+
+#[test]
 fn analyze_score_matches_baseline() {
     let config = config_path();
     let path = tmp("analyze.json");

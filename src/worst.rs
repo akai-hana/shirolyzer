@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::analyze::{trigram_pattern, true_same_finger_metrics};
 use crate::context;
@@ -170,9 +170,7 @@ pub fn run(args: WorstArgs) -> Result<()> {
             &latest
         }
     };
-    if layout.chars().count() != 30 {
-        return Err(anyhow!("layout must be 30 characters"));
-    }
+    crate::layout::validate_layout(layout).map_err(anyhow::Error::msg)?;
 
     let (corpus, labels) = if !args.primary_corpus.is_empty() {
         (
