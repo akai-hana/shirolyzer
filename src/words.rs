@@ -478,9 +478,7 @@ pub fn run(args: WordsArgs) -> Result<()> {
             &latest
         }
     };
-    if layout.chars().count() != 30 {
-        return Err(anyhow!("layout must be 30 characters"));
-    }
+    crate::layout::validate_layout(layout).map_err(anyhow::Error::msg)?;
 
     let entries = load_wordlist(args.wordlist, args.limit, args.min_frequency)?;
     let keys = KeyMap::new(layout);

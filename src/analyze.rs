@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde_json::json;
 
 use crate::context;
@@ -1250,9 +1250,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             &latest
         }
     };
-    if layout.chars().count() != 30 {
-        return Err(anyhow!("layout must be 30 characters"));
-    }
+    crate::layout::validate_layout(layout).map_err(anyhow::Error::msg)?;
     let out_path = args
         .out
         .map(Path::to_path_buf)
@@ -1377,8 +1375,9 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
     out("grid (QWERTY order, left/right split 5+5):".to_string());
     let chars: Vec<char> = layout.chars().collect();
     for r in 0..3 {
-        let row: String = chars[r * 10..(r + 1) * 10].iter().collect();
-        out(format!("  {} | {}", &row[..5], &row[5..]));
+        let left: String = chars[r * 10..r * 10 + 5].iter().collect();
+        let right: String = chars[r * 10 + 5..(r + 1) * 10].iter().collect();
+        out(format!("  {} | {}", left, right));
     }
     out(format!(
         "primary={:.9}  corpus={}",
