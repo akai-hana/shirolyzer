@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use shirolyzer::diversity::{self, Row};
-use shirolyzer::{conditions, config, corpus, gates, geometry, scorer};
+use shirolyzer::{conditions, config, corpus, evaluate, gates, geometry, scorer};
 
 mod common;
 
@@ -55,6 +56,65 @@ fn tables_have_expected_shape_and_values() {
     ] {
         assert!((big(a, b) - expected).abs() < 1e-12, "{a},{b}");
     }
+}
+
+#[test]
+fn space_trigrams_are_scored_consistently() {
+    let (cfg, geom, tables, _) = setup();
+    let model = config::build_model(&cfg).expect("model");
+    let gates = gates::Gates::from_config(&cfg);
+    let conds = conditions::Conditions::from_config(&cfg, &geom);
+
+    let mut letters = HashMap::new();
+    for (ch, count) in [('a', 10.0), ('b', 8.0), ('c', 6.0)] {
+        letters.insert(ch, count);
+    }
+    let mut trigrams = HashMap::new();
+    for (ngram, count) in [
+        (('a', ' ', 'b'), 10.0),
+        ((' ', 'a', 'b'), 5.0),
+        (('a', 'b', ' '), 7.0),
+        ((' ', ' ', 'a'), 1.0),
+        (('a', 'b', 'c'), 3.0),
+    ] {
+        trigrams.insert(ngram, count);
+    }
+    let corpus = corpus::Corpus::new(letters, HashMap::new(), trigrams);
+
+    let primary = evaluate::score_layout(SHIRO, &corpus, &tables);
+    let perm = evaluate::perm_of(SHIRO, &cfg.punctuation).expect("perm");
+    let flat = evaluate::flat_share_from_config(&cfg);
+    let (w_balance, w_hand) = cfg.balance_weights();
+    let ev = evaluate::Evaluator::new(
+        &corpus,
+        &tables,
+        &model,
+        &cfg.punctuation,
+        flat,
+        w_balance,
+        w_hand,
+    )
+    .expect("evaluator");
+    assert!(
+        (ev.weighted(&perm) / ev.n_tri - primary).abs() < 1e-12,
+        "generator trigram score disagrees with score_layout"
+    );
+
+    let breakdown = shirolyzer::analyze::score_breakdown(
+        SHIRO, &corpus, &tables, &model, &geom, &gates, &conds,
+    );
+    assert!(
+        breakdown.space > 0.0,
+        "space costs must reach the breakdown"
+    );
+    assert!((breakdown.total - primary).abs() < 1e-12);
+    assert!(
+        (breakdown.sum() - primary).abs() < 1e-9,
+        "sum={} primary={} breakdown={:?}",
+        breakdown.sum(),
+        primary,
+        breakdown
+    );
 }
 
 #[test]

@@ -13,8 +13,7 @@ use rand::{Rng, SeedableRng};
 use rayon::prelude::*;
 
 use crate::config::BalanceSource;
-use crate::evaluate::{Evaluator, Usage, N_ITEMS};
-use crate::geometry::{finger_hand, finger_kind};
+use crate::evaluate::{add_finger_usage, corpus_key, Evaluator, Usage, N_ITEMS};
 use crate::scorer::tri_idx_u8;
 
 pub trait ScoreFn {
@@ -187,9 +186,9 @@ impl<'a> Local<'a> {
         let mut weighted = 0.0;
         for (ids, &count) in ev.tri_idx_slot.iter().zip(ev.tri_counts.iter()) {
             let idx = tri_idx_u8(
-                kid[ids[0] as usize],
-                kid[ids[1] as usize],
-                kid[ids[2] as usize],
+                corpus_key(&kid, ids[0] as usize),
+                corpus_key(&kid, ids[1] as usize),
+                corpus_key(&kid, ids[2] as usize),
             );
             weighted += ev.tables.tri[idx] * count;
         }
@@ -279,8 +278,16 @@ impl<'a> Local<'a> {
                 let a = ids[0] as usize;
                 let b = ids[1] as usize;
                 let c = ids[2] as usize;
-                let old_idx = tri_idx_u8(self.kid[a], self.kid[b], self.kid[c]);
-                let new_idx = tri_idx_u8(kid2[a], kid2[b], kid2[c]);
+                let old_idx = tri_idx_u8(
+                    corpus_key(&self.kid, a),
+                    corpus_key(&self.kid, b),
+                    corpus_key(&self.kid, c),
+                );
+                let new_idx = tri_idx_u8(
+                    corpus_key(&kid2, a),
+                    corpus_key(&kid2, b),
+                    corpus_key(&kid2, c),
+                );
                 if old_idx == new_idx {
                     continue;
                 }
@@ -288,10 +295,8 @@ impl<'a> Local<'a> {
                 let old = self.ev.tables.tri_f[old_idx];
                 let new = self.ev.tables.tri_f[new_idx];
                 for pos in 0..3 {
-                    let of = old[pos] as usize;
-                    let nf = new[pos] as usize;
-                    usage[finger_hand(of)][finger_kind(of)] -= count;
-                    usage[finger_hand(nf)][finger_kind(nf)] += count;
+                    add_finger_usage(&mut usage, old[pos], -count);
+                    add_finger_usage(&mut usage, new[pos], count);
                 }
             }
         }
@@ -328,8 +333,16 @@ impl<'a> Local<'a> {
                 let a = ids[0] as usize;
                 let b = ids[1] as usize;
                 let c = ids[2] as usize;
-                let old_idx = tri_idx_u8(self.kid[a], self.kid[b], self.kid[c]);
-                let new_idx = tri_idx_u8(kid2[a], kid2[b], kid2[c]);
+                let old_idx = tri_idx_u8(
+                    corpus_key(&self.kid, a),
+                    corpus_key(&self.kid, b),
+                    corpus_key(&self.kid, c),
+                );
+                let new_idx = tri_idx_u8(
+                    corpus_key(kid2, a),
+                    corpus_key(kid2, b),
+                    corpus_key(kid2, c),
+                );
                 dw += (self.ev.tables.tri[new_idx] - self.ev.tables.tri[old_idx])
                     * self.ev.tri_counts[t];
                 if let Some(usage) = new_usage.as_mut() {
@@ -338,10 +351,8 @@ impl<'a> Local<'a> {
                         let old = self.ev.tables.tri_f[old_idx];
                         let new = self.ev.tables.tri_f[new_idx];
                         for pos in 0..3 {
-                            let of = old[pos] as usize;
-                            let nf = new[pos] as usize;
-                            usage[finger_hand(of)][finger_kind(of)] -= count;
-                            usage[finger_hand(nf)][finger_kind(nf)] += count;
+                            add_finger_usage(usage, old[pos], -count);
+                            add_finger_usage(usage, new[pos], count);
                         }
                     }
                 }
@@ -377,10 +388,26 @@ impl<'a> Local<'a> {
             let a = ids[0] as usize;
             let b = ids[1] as usize;
             let c = ids[2] as usize;
-            let old = self.ev.tables.tri[tri_idx_u8(self.kid[a], self.kid[b], self.kid[c])];
-            let only1 = self.ev.tables.tri[tri_idx_u8(kid1[a], kid1[b], kid1[c])];
-            let only2 = self.ev.tables.tri[tri_idx_u8(kid2[a], kid2[b], kid2[c])];
-            let both = self.ev.tables.tri[tri_idx_u8(kid12[a], kid12[b], kid12[c])];
+            let old = self.ev.tables.tri[tri_idx_u8(
+                corpus_key(&self.kid, a),
+                corpus_key(&self.kid, b),
+                corpus_key(&self.kid, c),
+            )];
+            let only1 = self.ev.tables.tri[tri_idx_u8(
+                corpus_key(&kid1, a),
+                corpus_key(&kid1, b),
+                corpus_key(&kid1, c),
+            )];
+            let only2 = self.ev.tables.tri[tri_idx_u8(
+                corpus_key(&kid2, a),
+                corpus_key(&kid2, b),
+                corpus_key(&kid2, c),
+            )];
+            let both = self.ev.tables.tri[tri_idx_u8(
+                corpus_key(&kid12, a),
+                corpus_key(&kid12, b),
+                corpus_key(&kid12, c),
+            )];
             dw += (both - only1 - only2 + old) * self.ev.tri_counts[t];
         }
         dw
