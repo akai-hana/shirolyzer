@@ -346,7 +346,9 @@ impl<'a> Evaluator<'a> {
         let hl = usage[0].iter().sum::<f64>();
         let hr = usage[1].iter().sum::<f64>();
         pen += ((hl - hr) / (hl + hr).max(1e-9)).powi(2) * self.w_hand;
-        pen += balance_guard_penalty(usage, &self.flat_share);
+        if self.w_balance > 0.0 {
+            pen += balance_guard_penalty(usage, &self.flat_share);
+        }
         pen
     }
 
