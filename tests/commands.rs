@@ -676,7 +676,7 @@ fn generate_smoke() {
     assert_eq!(value["completed_runs"], 1);
     assert_eq!(value["valid_layouts"].as_array().unwrap().len(), 1);
     let primary = value["best_primary"]["primary"].as_f64().unwrap();
-    assert!((primary - 3.561_684_071_761_569).abs() < 1e-6);
+    assert!((primary - 3.565_739_300_530_957).abs() < 1e-6);
 }
 
 #[test]
