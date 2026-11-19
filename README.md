@@ -253,7 +253,9 @@ Useful flags:
   score has not strictly improved for this many consecutive batches.
 - `--time-budget` (for example `90s`, `5m`, `1h`) — stop starting new work after
   this long and report the best result so far. Runs under a time budget execute
-  sequentially instead of in parallel.
+  sequentially instead of in parallel. The value must be finite, greater than
+  zero, and no more than seven days; invalid values are rejected before work
+  starts.
 - `--valid-tolerance` (default `0.002`), `--secondary-tolerance` (default
   `0.005`), `--min-layout-distance` (default `4`), `--max-valid` (default `8`)
   — how near-equal, diverse layouts are collected into the valid-layout report.
