@@ -108,6 +108,16 @@ fn parse_polish_rounds(v: &str) -> Result<usize, String> {
     }
 }
 
+fn parse_positive_usize(v: &str) -> Result<usize, String> {
+    let value = v
+        .parse::<usize>()
+        .map_err(|_| format!("expected a positive integer, got {v:?}"))?;
+    if value == 0 {
+        return Err(format!("expected a positive integer, got {v:?}"));
+    }
+    Ok(value)
+}
+
 fn parse_finite_non_negative(v: &str) -> Result<f64, String> {
     let value = v
         .parse::<f64>()
@@ -186,16 +196,17 @@ struct GenerateArgs {
     runs: usize,
     #[arg(long, default_value_t = 200_000)]
     iters: usize,
-    #[arg(long, default_value_t = 8)]
+    /// ILS rounds per candidate (must be at least 1)
+    #[arg(long, default_value_t = 8, value_parser = parse_positive_usize)]
     ils: usize,
-    /// Number of diverse top layouts advanced to ILS
-    #[arg(long = "ils-candidates", default_value_t = 4)]
+    /// Number of diverse top layouts advanced to ILS (must be at least 1)
+    #[arg(long = "ils-candidates", default_value_t = 4, value_parser = parse_positive_usize)]
     ils_candidates: usize,
     /// Perturbation rounds per candidate in the secondary phase (default: same as --ils; 0 only scores them)
     #[arg(long = "secondary-rounds")]
     secondary_rounds: Option<usize>,
-    /// Random starts run per batch; batches are sequential so early stopping can occur between them
-    #[arg(long = "batch-size", default_value_t = 8)]
+    /// Random starts run per batch; batches are sequential so early stopping can occur between them (must be at least 1)
+    #[arg(long = "batch-size", default_value_t = 8, value_parser = parse_positive_usize)]
     batch_size: usize,
     /// Stop after the best letter placement is found by this many random starts (0 disables)
     #[arg(long = "stop-hits", default_value_t = 0)]
@@ -209,7 +220,8 @@ struct GenerateArgs {
     secondary_tolerance: f64,
     #[arg(long = "min-layout-distance", default_value_t = 4)]
     min_layout_distance: usize,
-    #[arg(long = "max-valid", default_value_t = 8)]
+    /// Maximum number of valid layouts to report (must be at least 1)
+    #[arg(long = "max-valid", default_value_t = 8, value_parser = parse_positive_usize)]
     max_valid: usize,
     /// Max polish rounds per candidate: a number, "unlimited" (default), or 0 to
     /// disable.  Polishing always stops early once a round finds no improvement.

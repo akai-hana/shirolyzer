@@ -125,6 +125,13 @@ fn commands_reject_invalid_numeric_flags() {
             "--primary-sacrifice",
         ),
         (vec!["generate", "--primary-sacrifice", "101"], "percentage"),
+        (vec!["generate", "--ils", "0"], "--ils"),
+        (
+            vec!["generate", "--ils-candidates", "0"],
+            "--ils-candidates",
+        ),
+        (vec!["generate", "--batch-size", "0"], "--batch-size"),
+        (vec!["generate", "--max-valid", "0"], "--max-valid"),
         (
             vec!["apostrophe", "--primary-tolerance", "nan"],
             "--primary-tolerance",
@@ -158,6 +165,7 @@ fn analyze_score_matches_baseline() {
     ]);
     assert!(out.status.success());
     let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(value["schema_version"].as_u64(), Some(1));
     let score = value["primary_score"].as_f64().unwrap();
     assert!((score - 3.960_357_335_158_009).abs() < 1e-12);
     for entry in value["guide"].as_object().unwrap().values() {
@@ -430,6 +438,7 @@ fn words_reports_common_word_costs_and_writes_corpus() {
         String::from_utf8_lossy(&out.stderr)
     );
     let value: Value = serde_json::from_str(&std::fs::read_to_string(&json_path).unwrap()).unwrap();
+    assert_eq!(value["schema_version"].as_u64(), Some(1));
     assert_eq!(value["scored_words"].as_u64().unwrap(), 3);
     assert!(value["aggregate"]["bigram_avg"].as_f64().unwrap() > 0.0);
     let top = value["top_bigram_cost"].as_array().unwrap();
@@ -508,6 +517,7 @@ fn stored_shiro_score_matches_shipped_config() {
         String::from_utf8_lossy(&out.stderr)
     );
     let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(value["schema_version"].as_u64(), Some(1));
     let primary = value["primary_score"].as_f64().unwrap();
     let secondary = value["secondary_score"].as_f64().unwrap();
     assert!(
@@ -562,6 +572,7 @@ fn apostrophe_command_reports_placements_and_swaps() {
         String::from_utf8_lossy(&out.stderr)
     );
     let value: Value = serde_json::from_str(&std::fs::read_to_string(&json_path).unwrap()).unwrap();
+    assert_eq!(value["schema_version"].as_u64(), Some(1));
     assert_eq!(
         value["punctuation_placements"].as_array().unwrap().len(),
         24
@@ -593,6 +604,7 @@ fn audit_and_check_baseline_pass() {
     assert!(out.status.success());
     assert!(stdout(&out).contains("rulings: 166/166"));
     let value: Value = serde_json::from_str(&std::fs::read_to_string(&out_json).unwrap()).unwrap();
+    assert_eq!(value["schema_version"].as_u64(), Some(1));
     assert_eq!(value["config"], "A:all");
     for corpus in value["corpora"].as_object().unwrap().values() {
         for key in ["letters", "bigrams", "trigrams"] {
@@ -673,10 +685,120 @@ fn generate_smoke() {
         String::from_utf8_lossy(&out.stderr)
     );
     let value: Value = serde_json::from_str(&std::fs::read_to_string(&out_json).unwrap()).unwrap();
+    assert_eq!(value["schema_version"].as_u64(), Some(1));
     assert_eq!(value["completed_runs"], 1);
     assert_eq!(value["valid_layouts"].as_array().unwrap().len(), 1);
     let primary = value["best_primary"]["primary"].as_f64().unwrap();
     assert!((primary - 3.565_739_300_530_957).abs() < 1e-6);
+}
+
+static GENERATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn run_quick_generate(extra: &[&str]) -> std::process::Output {
+    let _guard = GENERATE_LOCK.lock().unwrap();
+    let config = config_path();
+    let mut args = vec![
+        "generate",
+        "--config",
+        config.as_str(),
+        "--seed-layout",
+        SHIRO,
+        "--seed",
+        "123",
+        "--runs",
+        "0",
+        "--iters",
+        "10",
+        "--ils",
+        "1",
+        "--polish-rounds",
+        "0",
+    ];
+    args.extend_from_slice(extra);
+    run(&args)
+}
+
+#[test]
+fn generate_does_not_modify_references_by_default() {
+    let refs = tmp("refs-no-append.toml");
+    let original = "[[reference]]\nname = \"other\"\nlayout = \"abcdefghijklmnopqrstuvwxyz;,./\"\n";
+    std::fs::write(&refs, original).unwrap();
+    let out_txt = tmp("generate-no-append.txt");
+    let out_json = tmp("generate-no-append.json");
+    let out = run_quick_generate(&[
+        "--references",
+        refs.to_str().unwrap(),
+        "--out",
+        out_txt.to_str().unwrap(),
+        "--out-json",
+        out_json.to_str().unwrap(),
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(std::fs::read_to_string(&refs).unwrap(), original);
+    let value: Value = serde_json::from_str(&std::fs::read_to_string(&out_json).unwrap()).unwrap();
+    assert!(value["append_references"].is_null());
+    assert!(value["reference_added"].is_null());
+    assert!(value["references_added"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn generate_appends_references_only_when_requested() {
+    let refs = tmp("refs-append.toml");
+    let original = "[[reference]]\nname = \"other\"\nlayout = \"abcdefghijklmnopqrstuvwxyz;,./\"\n";
+    std::fs::write(&refs, original).unwrap();
+    let out_txt = tmp("generate-append.txt");
+    let out_json = tmp("generate-append.json");
+    let out = run_quick_generate(&[
+        "--references",
+        refs.to_str().unwrap(),
+        "--append-references",
+        refs.to_str().unwrap(),
+        "--out",
+        out_txt.to_str().unwrap(),
+        "--out-json",
+        out_json.to_str().unwrap(),
+    ]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let updated = std::fs::read_to_string(&refs).unwrap();
+    assert_ne!(updated, original);
+    assert_eq!(updated.matches("[[reference]]").count(), 2);
+    let value: Value = serde_json::from_str(&std::fs::read_to_string(&out_json).unwrap()).unwrap();
+    assert_eq!(
+        value["append_references"].as_str().unwrap(),
+        refs.to_str().unwrap()
+    );
+    assert!(value["reference_added"].is_string());
+    assert_eq!(value["references_added"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn generate_rejects_malformed_append_references() {
+    let refs = tmp("refs-malformed-append.toml");
+    std::fs::write(&refs, "this is not valid [[[ toml").unwrap();
+    let out_txt = tmp("generate-malformed-append.txt");
+    let out_json = tmp("generate-malformed-append.json");
+    let out = run_quick_generate(&[
+        "--append-references",
+        refs.to_str().unwrap(),
+        "--out",
+        out_txt.to_str().unwrap(),
+        "--out-json",
+        out_json.to_str().unwrap(),
+    ]);
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("invalid TOML"), "{err}");
+    assert!(!err.contains("panicked"), "{err}");
+    assert!(!out_txt.exists());
+    assert!(!out_json.exists());
 }
 
 #[test]

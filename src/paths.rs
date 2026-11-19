@@ -1,4 +1,5 @@
 //! Repository-relative path helpers.
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -114,7 +115,7 @@ pub fn read_latest_layout() -> Result<String> {
 pub fn write_latest_layout(layout: &str, timestamp: &str) -> Result<PathBuf> {
     let path = results_dir().join(format!("layout_{}.txt", timestamp));
     ensure_parent(&path)?;
-    std::fs::write(&path, format!("{}\n", layout))?;
+    write_atomic(&path, format!("{}\n", layout))?;
     let link = latest_layout_file();
     if std::fs::symlink_metadata(&link).is_ok() {
         std::fs::remove_file(&link)?;
@@ -122,7 +123,7 @@ pub fn write_latest_layout(layout: &str, timestamp: &str) -> Result<PathBuf> {
     #[cfg(unix)]
     std::os::unix::fs::symlink(path.file_name().unwrap(), &link)?;
     #[cfg(not(unix))]
-    std::fs::copy(&path, &link)?;
+    copy_atomic(&path, &link)?;
     Ok(path)
 }
 
@@ -197,4 +198,96 @@ pub fn ensure_parent(path: &Path) -> Result<()> {
 
 pub fn read_to_string(path: &Path) -> Result<String> {
     std::fs::read_to_string(path).map_err(|e| anyhow!("{}: {}", path.display(), e))
+}
+
+pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
+    ensure_parent(path)?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("artifact");
+    let mut attempt = 0u32;
+    let temp_path = loop {
+        let candidate = parent.join(format!(
+            ".{}.tmp-{}-{}",
+            file_name,
+            std::process::id(),
+            attempt
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(contents.as_ref()) {
+                    let _ = std::fs::remove_file(&candidate);
+                    return Err(anyhow!("{}: {}", candidate.display(), error));
+                }
+                break candidate;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                attempt += 1;
+                if attempt > 1_000 {
+                    return Err(anyhow!(
+                        "{}: could not allocate a temporary file",
+                        path.display()
+                    ));
+                }
+            }
+            Err(error) => return Err(anyhow!("{}: {}", candidate.display(), error)),
+        }
+    };
+    if let Err(error) = std::fs::rename(&temp_path, path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(anyhow!("{}: {}", path.display(), error));
+    }
+    Ok(())
+}
+
+pub fn copy_atomic(src: &Path, dest: &Path) -> Result<()> {
+    let contents = std::fs::read(src).map_err(|e| anyhow!("{}: {}", src.display(), e))?;
+    write_atomic(dest, contents)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("shirolyzer-paths-{}-{}", std::process::id(), label))
+    }
+
+    #[test]
+    fn write_atomic_replaces_existing_contents() {
+        let dir = temp_dir("replace");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("nested/layout.txt");
+        ensure_parent(&path).unwrap();
+        std::fs::write(&path, "old\n").unwrap();
+
+        write_atomic(&path, "new\n").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new\n");
+        let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".tmp-"))
+            .collect();
+        assert!(leftovers.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_atomic_creates_missing_parent_directories() {
+        let dir = temp_dir("create-parent");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("a/b/result.json");
+
+        write_atomic(&path, b"{}").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
