@@ -30,6 +30,7 @@ use crate::ui;
 use crate::xkb;
 
 const ILS_MIN_LETTER_DISTANCE: usize = 4;
+pub const MAX_TIME_BUDGET_SECS: f64 = 7.0 * 24.0 * 60.0 * 60.0;
 
 pub fn parse_budget(value: &str) -> Result<f64> {
     let value = value.trim().to_lowercase();
@@ -37,17 +38,36 @@ pub fn parse_budget(value: &str) -> Result<f64> {
         text.parse::<f64>()
             .map_err(|_| anyhow!("invalid time budget: {}", value))
     };
-    if let Some(v) = value.strip_suffix("ms") {
-        Ok(number(v)? / 1000.0)
+    let seconds = if let Some(v) = value.strip_suffix("ms") {
+        number(v)? / 1000.0
     } else if let Some(v) = value.strip_suffix('s') {
-        number(v)
+        number(v)?
     } else if let Some(v) = value.strip_suffix('m') {
-        Ok(number(v)? * 60.0)
+        number(v)? * 60.0
     } else if let Some(v) = value.strip_suffix('h') {
-        Ok(number(v)? * 3600.0)
+        number(v)? * 3600.0
     } else {
-        number(&value)
+        number(&value)?
+    };
+    validate_time_budget(seconds)
+}
+
+pub fn validate_time_budget(seconds: f64) -> Result<f64> {
+    if !seconds.is_finite() {
+        return Err(anyhow!("time budget must be finite, got {seconds}"));
     }
+    if seconds <= 0.0 {
+        return Err(anyhow!(
+            "time budget must be greater than zero, got {seconds}"
+        ));
+    }
+    if seconds > MAX_TIME_BUDGET_SECS {
+        return Err(anyhow!(
+            "time budget must not exceed 7 days ({} seconds), got {seconds}",
+            MAX_TIME_BUDGET_SECS
+        ));
+    }
+    Ok(seconds)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -710,6 +730,9 @@ fn run_seed_batch(
 }
 
 pub fn run(args: GenerateArgs) -> Result<()> {
+    if let Some(budget) = args.time_budget {
+        validate_time_budget(budget)?;
+    }
     let ctx = Context::load(args.config)?;
     let timestamp = paths::timestamp();
     let layout_name = args.layout.clone();
@@ -1097,7 +1120,12 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     println!();
     let deadline = args
         .time_budget
-        .map(|budget| started + std::time::Duration::from_secs_f64(budget));
+        .map(|budget| {
+            std::time::Duration::try_from_secs_f64(budget)
+                .map(|duration| started + duration)
+                .map_err(|_| anyhow!("invalid time budget: {budget}"))
+        })
+        .transpose()?;
     let ils_planned = top.len() * args.ils.max(1);
     let ils_progress = ui::Progress::new("ILS", ils_planned);
     let ils_tick = || ils_progress.tick();
@@ -1903,6 +1931,32 @@ pub fn run(args: GenerateArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn time_budget_parser_accepts_supported_forms() {
+        assert_eq!(parse_budget("1500ms").unwrap(), 1.5);
+        assert_eq!(parse_budget("1.5s").unwrap(), 1.5);
+        assert_eq!(parse_budget("1.5m").unwrap(), 90.0);
+        assert_eq!(parse_budget("1h").unwrap(), 3600.0);
+        assert_eq!(parse_budget("90").unwrap(), 90.0);
+        assert_eq!(parse_budget("168h").unwrap(), MAX_TIME_BUDGET_SECS);
+    }
+
+    #[test]
+    fn time_budget_parser_rejects_invalid_values() {
+        for (input, needle) in [
+            ("-1", "greater than zero"),
+            ("0", "greater than zero"),
+            ("nan", "finite"),
+            ("inf", "finite"),
+            ("1e309", "finite"),
+            ("169h", "7 days"),
+            ("not-a-duration", "invalid time budget"),
+        ] {
+            let err = parse_budget(input).unwrap_err().to_string();
+            assert!(err.contains(needle), "{input}: {err}");
+        }
+    }
 
     fn row(start: &str, layout: &str) -> Row {
         Row::new(start, 1.0, None, layout)
