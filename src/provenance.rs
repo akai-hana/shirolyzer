@@ -199,7 +199,7 @@ pub fn describe(label: &str, weight: f64, path: &Path) -> Result<Provenance> {
             vec![file],
             totals,
         )
-    } else if let Some(source) = corpus::source_file(&resolved) {
+    } else if let Some(source) = corpus::source_file(&resolved)? {
         let (file, _) = digest(&source)?;
         let corpus = Corpus::load(&resolved)?;
         (

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -12,6 +12,11 @@ use unicode_normalization::UnicodeNormalization;
 pub const SPACE_INDEX: usize = 26;
 pub(crate) const PARSED_FILES: [&str; 3] =
     ["letter_freq.json", "bigram_freq.json", "trigram_freq.json"];
+
+const MIB: u64 = 1024 * 1024;
+pub const MAX_COMPRESSED_BYTES: u64 = 64 * MIB;
+pub const MAX_DECOMPRESSED_BYTES: u64 = 256 * MIB;
+pub const MAX_JSON_BYTES: u64 = 64 * MIB;
 
 #[derive(Clone, Debug, Default)]
 pub struct Corpus {
@@ -129,7 +134,7 @@ impl Corpus {
         if let Some(parsed) = parsed_dir(path) {
             return Self::load_parsed(&parsed);
         }
-        if let Some(source) = source_file(path) {
+        if let Some(source) = source_file(path)? {
             let text = read_source(&source)?;
             let normalized: String = text
                 .to_lowercase()
@@ -249,9 +254,8 @@ fn single_char(s: &str) -> Option<char> {
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
-    let text = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("invalid JSON in {}", path.display()))
+    let data = read_bytes_limited(path, MAX_JSON_BYTES, "JSON file")?;
+    serde_json::from_slice(&data).with_context(|| format!("invalid JSON in {}", path.display()))
 }
 
 pub(crate) fn parsed_dir(path: &Path) -> Option<PathBuf> {
@@ -275,28 +279,46 @@ pub(crate) fn parsed_dir(path: &Path) -> Option<PathBuf> {
     None
 }
 
-pub(crate) fn source_file(path: &Path) -> Option<PathBuf> {
+pub(crate) fn source_file(path: &Path) -> Result<Option<PathBuf>> {
     let path = expand_user(path);
     if path.is_file() {
-        return Some(path);
+        return Ok(Some(path));
     }
     if path.is_dir() {
-        let candidates: Vec<PathBuf> = std::fs::read_dir(&path)
-            .ok()?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| {
-                p.is_file()
-                    && p.extension()
-                        .and_then(|e| e.to_str())
-                        .map(|e| matches!(e.to_lowercase().as_str(), "txt" | "xz" | "zip"))
-                        .unwrap_or(false)
-            })
-            .collect();
-        if candidates.len() == 1 {
-            return Some(candidates[0].clone());
+        let mut candidates = Vec::new();
+        for entry in std::fs::read_dir(&path)
+            .with_context(|| format!("failed to read corpus directory {}", path.display()))?
+        {
+            let entry = entry
+                .with_context(|| format!("failed to read corpus directory {}", path.display()))?;
+            let path = entry.path();
+            if path.is_file() && is_raw_source(&path) {
+                candidates.push(path);
+            }
         }
+        candidates.sort();
+        if candidates.len() > 1 {
+            let names = candidates
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(anyhow!(
+                "corpus directory {} contains multiple raw sources: {}; pass one file explicitly",
+                path.display(),
+                names
+            ));
+        }
+        return Ok(candidates.into_iter().next());
     }
-    None
+    Ok(None)
+}
+
+fn is_raw_source(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| matches!(e.to_lowercase().as_str(), "txt" | "xz" | "zip"))
+        .unwrap_or(false)
 }
 
 pub(crate) fn expand_user(path: &Path) -> PathBuf {
@@ -317,33 +339,140 @@ fn read_source(path: &Path) -> Result<String> {
         .to_lowercase();
     match suffix.as_str() {
         "xz" => {
-            let mut input = Vec::new();
-            File::open(path)
-                .with_context(|| format!("failed to open {}", path.display()))?
-                .read_to_end(&mut input)?;
-            let mut output = Vec::new();
+            let input = read_bytes_limited(path, MAX_COMPRESSED_BYTES, "compressed corpus")?;
+            let mut output = LimitedWriter::new(MAX_DECOMPRESSED_BYTES, "decompressed corpus");
             lzma_rs::xz_decompress(&mut &input[..], &mut output)
                 .with_context(|| format!("failed to decompress {}", path.display()))?;
-            Ok(String::from_utf8_lossy(&output).into_owned())
+            decode_utf8(output.into_inner(), &path.display().to_string())
         }
         "zip" => {
+            check_file_size(path, MAX_COMPRESSED_BYTES, "compressed corpus")?;
             let file =
                 File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
             let mut archive = zip::ZipArchive::new(file)
                 .with_context(|| format!("invalid zip {}", path.display()))?;
-            let name = (0..archive.len())
+            let mut candidates: Vec<String> = (0..archive.len())
                 .map(|i| archive.by_index(i).map(|f| f.name().to_string()))
                 .collect::<std::result::Result<Vec<_>, _>>()?
                 .into_iter()
-                .find(|n| n.to_lowercase().ends_with(".txt"))
-                .ok_or_else(|| anyhow!("no .txt member in {}", path.display()))?;
-            let mut member = archive.by_name(&name)?;
+                .filter(|name| name.to_lowercase().ends_with(".txt") && !name.ends_with('/'))
+                .collect();
+            candidates.sort();
+            let name = match candidates.as_slice() {
+                [] => return Err(anyhow!("no .txt member in {}", path.display())),
+                [name] => name.clone(),
+                _ => {
+                    return Err(anyhow!(
+                        "{} contains multiple .txt members: {}",
+                        path.display(),
+                        candidates.join(", ")
+                    ))
+                }
+            };
+            let label = format!("{}:{}", path.display(), name);
+            let member = archive.by_name(&name)?;
+            if member.size() > MAX_DECOMPRESSED_BYTES {
+                return Err(anyhow!(
+                    "{} exceeds the {} MiB decompressed limit",
+                    label,
+                    MAX_DECOMPRESSED_BYTES / MIB
+                ));
+            }
             let mut output = Vec::new();
-            member.read_to_end(&mut output)?;
-            Ok(String::from_utf8_lossy(&output).into_owned())
+            member
+                .take(MAX_DECOMPRESSED_BYTES + 1)
+                .read_to_end(&mut output)
+                .with_context(|| format!("failed to read {label}"))?;
+            if output.len() as u64 > MAX_DECOMPRESSED_BYTES {
+                return Err(anyhow!(
+                    "{} exceeds the {} MiB decompressed limit",
+                    label,
+                    MAX_DECOMPRESSED_BYTES / MIB
+                ));
+            }
+            decode_utf8(output, &label)
         }
-        _ => Ok(std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?),
+        _ => {
+            let bytes = read_bytes_limited(path, MAX_DECOMPRESSED_BYTES, "text file")?;
+            decode_utf8(bytes, &path.display().to_string())
+        }
+    }
+}
+
+fn check_file_size(path: &Path, limit: u64, what: &str) -> Result<u64> {
+    let size = std::fs::metadata(path)
+        .with_context(|| format!("failed to inspect {}", path.display()))?
+        .len();
+    if size > limit {
+        return Err(anyhow!(
+            "{} {} exceeds the {} MiB limit: {} bytes",
+            what,
+            path.display(),
+            limit / MIB,
+            size
+        ));
+    }
+    Ok(size)
+}
+
+fn read_bytes_limited(path: &Path, limit: u64, what: &str) -> Result<Vec<u8>> {
+    check_file_size(path, limit, what)?;
+    let file = File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
+    let mut data = Vec::new();
+    file.take(limit + 1)
+        .read_to_end(&mut data)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    if data.len() as u64 > limit {
+        return Err(anyhow!(
+            "{} {} exceeds the {} MiB limit",
+            what,
+            path.display(),
+            limit / MIB
+        ));
+    }
+    Ok(data)
+}
+
+fn decode_utf8(bytes: Vec<u8>, label: &str) -> Result<String> {
+    String::from_utf8(bytes)
+        .map_err(|e| anyhow!("{} is not valid UTF-8: {}", label, e.utf8_error()))
+}
+
+struct LimitedWriter {
+    data: Vec<u8>,
+    limit: u64,
+    label: &'static str,
+}
+
+impl LimitedWriter {
+    fn new(limit: u64, label: &'static str) -> Self {
+        Self {
+            data: Vec::new(),
+            limit,
+            label,
+        }
+    }
+
+    fn into_inner(self) -> Vec<u8> {
+        self.data
+    }
+}
+
+impl Write for LimitedWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.data.len() as u64 + buf.len() as u64 > self.limit {
+            return Err(io::Error::other(format!(
+                "{} exceeds the {} MiB limit",
+                self.label,
+                self.limit / MIB
+            )));
+        }
+        self.data.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -353,4 +482,145 @@ pub fn load_many(paths: &[PathBuf]) -> Result<Corpus> {
         .map(|p| Corpus::load(p))
         .collect::<Result<Vec<_>>>()?;
     Corpus::merge(&corpora)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let seq = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "shirolyzer-corpus-{}-{}-{}",
+            std::process::id(),
+            name,
+            seq
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write_zip(path: &Path, members: &[(&str, &[u8])]) {
+        let file = File::create(path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        for (name, data) in members {
+            zip.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(data).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    fn write_xz(path: &Path, data: &[u8]) {
+        let mut output = Vec::new();
+        lzma_rs::xz_compress(&mut std::io::Cursor::new(data), &mut output).unwrap();
+        std::fs::write(path, output).unwrap();
+    }
+
+    #[test]
+    fn rejects_ambiguous_source_directories_with_candidates() {
+        let dir = temp_dir("ambiguous");
+        std::fs::write(dir.join("a.txt"), b"alpha").unwrap();
+        std::fs::write(dir.join("b.xz"), b"beta").unwrap();
+        let err = Corpus::load(&dir).unwrap_err().to_string();
+        assert!(err.contains("multiple raw sources"), "{err}");
+        assert!(err.contains("a.txt"), "{err}");
+        assert!(err.contains("b.xz"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_archives_with_multiple_text_members() {
+        let dir = temp_dir("multi-member");
+        let path = dir.join("multi.zip");
+        write_zip(&path, &[("a.txt", b"alpha"), ("b.txt", b"beta")]);
+        let err = Corpus::load(&path).unwrap_err().to_string();
+        assert!(err.contains("multiple .txt members"), "{err}");
+        assert!(err.contains("a.txt"), "{err}");
+        assert!(err.contains("b.txt"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_invalid_utf8_in_raw_and_compressed_sources() {
+        let dir = temp_dir("invalid-utf8");
+        let raw = dir.join("bad.txt");
+        std::fs::write(&raw, b"abc\xff").unwrap();
+        let err = Corpus::load(&raw).unwrap_err().to_string();
+        assert!(err.contains("not valid UTF-8"), "{err}");
+
+        let zip = dir.join("bad.zip");
+        write_zip(&zip, &[("bad.txt", b"abc\xff")]);
+        let err = Corpus::load(&zip).unwrap_err().to_string();
+        assert!(err.contains("not valid UTF-8"), "{err}");
+        assert!(err.contains("bad.txt"), "{err}");
+
+        let xz = dir.join("bad.xz");
+        write_xz(&xz, b"abc\xff");
+        let err = Corpus::load(&xz).unwrap_err().to_string();
+        assert!(err.contains("not valid UTF-8"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_oversized_source_and_json_inputs() {
+        let dir = temp_dir("oversized");
+
+        let raw = dir.join("huge.txt");
+        let file = File::create(&raw).unwrap();
+        file.set_len(MAX_DECOMPRESSED_BYTES + 1).unwrap();
+        drop(file);
+        let err = Corpus::load(&raw).unwrap_err().to_string();
+        assert!(err.contains("text file"), "{err}");
+        assert!(err.contains("limit"), "{err}");
+
+        let xz = dir.join("huge.xz");
+        let file = File::create(&xz).unwrap();
+        file.set_len(MAX_COMPRESSED_BYTES + 1).unwrap();
+        drop(file);
+        let err = Corpus::load(&xz).unwrap_err().to_string();
+        assert!(err.contains("compressed corpus"), "{err}");
+        assert!(err.contains("limit"), "{err}");
+
+        let zip = dir.join("huge.zip");
+        let file = File::create(&zip).unwrap();
+        file.set_len(MAX_COMPRESSED_BYTES + 1).unwrap();
+        drop(file);
+        let err = Corpus::load(&zip).unwrap_err().to_string();
+        assert!(err.contains("compressed corpus"), "{err}");
+        assert!(err.contains("limit"), "{err}");
+
+        let parsed = dir.join("parsed");
+        std::fs::create_dir_all(&parsed).unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[0]), b"{}").unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[1]), b"{}").unwrap();
+        let trigrams = File::create(parsed.join(PARSED_FILES[2])).unwrap();
+        trigrams.set_len(MAX_JSON_BYTES + 1).unwrap();
+        drop(trigrams);
+        let err = Corpus::load(&parsed).unwrap_err().to_string();
+        assert!(err.contains("JSON file"), "{err}");
+        assert!(err.contains("limit"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn byte_and_decompression_limits_are_enforced() {
+        let dir = temp_dir("limits");
+        let path = dir.join("data.txt");
+        std::fs::write(&path, b"hello").unwrap();
+        let err = read_bytes_limited(&path, 4, "test file")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("test file"), "{err}");
+        assert!(err.contains("limit"), "{err}");
+
+        let mut writer = LimitedWriter::new(4, "decompressed test");
+        assert_eq!(writer.write(b"four").unwrap(), 4);
+        assert!(writer.write(b"more").is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

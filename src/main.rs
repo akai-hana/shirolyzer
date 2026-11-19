@@ -67,7 +67,7 @@ struct ApostropheArgs {
     #[arg(long)]
     config: Option<PathBuf>,
     /// Maximum allowed increase in the primary score for a letter swap
-    #[arg(long = "primary-tolerance", default_value_t = 0.002)]
+    #[arg(long = "primary-tolerance", default_value_t = 0.002, value_parser = parse_finite_non_negative, allow_hyphen_values = true)]
     primary_tolerance: f64,
     /// Number of top single swaps to print
     #[arg(long, default_value_t = 10)]
@@ -108,6 +108,30 @@ fn parse_polish_rounds(v: &str) -> Result<usize, String> {
     }
 }
 
+fn parse_finite_non_negative(v: &str) -> Result<f64, String> {
+    let value = v
+        .parse::<f64>()
+        .map_err(|_| format!("expected a finite non-negative number, got {v:?}"))?;
+    if !value.is_finite() || value < 0.0 {
+        return Err(format!("expected a finite non-negative number, got {v:?}"));
+    }
+    Ok(value)
+}
+
+fn parse_percentage(v: &str) -> Result<f64, String> {
+    let value = parse_finite_non_negative(v)?;
+    if value > 100.0 {
+        return Err(format!(
+            "expected a finite percentage between 0 and 100, got {v:?}"
+        ));
+    }
+    Ok(value)
+}
+
+fn parse_time_budget(v: &str) -> Result<f64, String> {
+    generate::parse_budget(v).map_err(|error| error.to_string())
+}
+
 #[derive(Args)]
 struct WordsArgs {
     /// 30-character layout to inspect (defaults to the latest generate result)
@@ -124,7 +148,7 @@ struct WordsArgs {
     #[arg(long, default_value_t = 20)]
     top: usize,
     /// Ignore words below this frequency
-    #[arg(long = "min-frequency", default_value_t = 0.0)]
+    #[arg(long = "min-frequency", default_value_t = 0.0, value_parser = parse_finite_non_negative, allow_hyphen_values = true)]
     min_frequency: f64,
     #[arg(long)]
     out: Option<PathBuf>,
@@ -156,7 +180,7 @@ struct GenerateArgs {
     secondary_corpus: Vec<String>,
     #[arg(long)]
     references: Option<PathBuf>,
-    #[arg(long = "primary-sacrifice")]
+    #[arg(long = "primary-sacrifice", value_parser = parse_percentage, allow_hyphen_values = true)]
     primary_sacrifice: Option<f64>,
     #[arg(long, default_value_t = 28)]
     runs: usize,
@@ -179,9 +203,9 @@ struct GenerateArgs {
     /// Stop after this many consecutive batches without a primary improvement (0 disables)
     #[arg(long = "stop-stale-batches", default_value_t = 0)]
     stop_stale_batches: usize,
-    #[arg(long = "valid-tolerance", default_value_t = 0.002)]
+    #[arg(long = "valid-tolerance", default_value_t = 0.002, value_parser = parse_finite_non_negative, allow_hyphen_values = true)]
     valid_tolerance: f64,
-    #[arg(long = "secondary-tolerance", default_value_t = 0.005)]
+    #[arg(long = "secondary-tolerance", default_value_t = 0.005, value_parser = parse_finite_non_negative, allow_hyphen_values = true)]
     secondary_tolerance: f64,
     #[arg(long = "min-layout-distance", default_value_t = 4)]
     min_layout_distance: usize,
@@ -197,8 +221,8 @@ struct GenerateArgs {
     append_references: Option<PathBuf>,
     #[arg(long)]
     seed: Option<u64>,
-    #[arg(long = "time-budget")]
-    time_budget: Option<String>,
+    #[arg(long = "time-budget", value_parser = parse_time_budget, allow_hyphen_values = true)]
+    time_budget: Option<f64>,
     /// List every distinct layout from the anneal stage, with its layout string
     #[arg(long, short = 'v')]
     verbose: bool,
@@ -276,7 +300,7 @@ struct CheckArgs {
     config: Option<PathBuf>,
     #[arg(long)]
     rulings: Option<PathBuf>,
-    #[arg(long, default_value_t = 1e-9)]
+    #[arg(long, default_value_t = 1e-9, value_parser = parse_finite_non_negative, allow_hyphen_values = true)]
     tolerance: f64,
     #[arg(long)]
     write: bool,
@@ -324,45 +348,39 @@ fn main() -> Result<()> {
             out_json: args.out_json.as_deref(),
             out_corpus: args.out_corpus.as_deref(),
         }),
-        Command::Generate(args) => {
-            let time_budget = match args.time_budget.as_deref() {
-                Some(text) => Some(generate::parse_budget(text)?),
-                None => None,
-            };
-            generate::run(generate::GenerateArgs {
-                config: args.config.as_deref(),
-                seed_layout: args.seed_layout,
-                seed_reference: args.seed_reference,
-                seed_all_references: args.seed_all_references,
-                layout: args.layout,
-                primary_corpus: args.primary_corpus,
-                secondary_corpus: args.secondary_corpus,
-                references: args.references,
-                primary_sacrifice: args.primary_sacrifice,
-                runs: args.runs,
-                iters: args.iters,
-                ils: args.ils,
-                ils_candidates: args.ils_candidates,
-                secondary_rounds: args.secondary_rounds,
-                batch_size: args.batch_size,
-                stop_hits: args.stop_hits,
-                stop_stale_batches: args.stop_stale_batches,
-                valid_tolerance: args.valid_tolerance,
-                secondary_tolerance: args.secondary_tolerance,
-                min_layout_distance: args.min_layout_distance,
-                max_valid: args.max_valid,
-                polish_rounds: args.polish_rounds,
-                polish_candidates: args.polish_candidates,
-                append_references: args.append_references,
-                seed: args.seed,
-                time_budget,
-                verbose: args.verbose,
-                xkb: args.xkb,
-                xkb_name: args.xkb_name,
-                out: args.out,
-                out_json: args.out_json,
-            })
-        }
+        Command::Generate(args) => generate::run(generate::GenerateArgs {
+            config: args.config.as_deref(),
+            seed_layout: args.seed_layout,
+            seed_reference: args.seed_reference,
+            seed_all_references: args.seed_all_references,
+            layout: args.layout,
+            primary_corpus: args.primary_corpus,
+            secondary_corpus: args.secondary_corpus,
+            references: args.references,
+            primary_sacrifice: args.primary_sacrifice,
+            runs: args.runs,
+            iters: args.iters,
+            ils: args.ils,
+            ils_candidates: args.ils_candidates,
+            secondary_rounds: args.secondary_rounds,
+            batch_size: args.batch_size,
+            stop_hits: args.stop_hits,
+            stop_stale_batches: args.stop_stale_batches,
+            valid_tolerance: args.valid_tolerance,
+            secondary_tolerance: args.secondary_tolerance,
+            min_layout_distance: args.min_layout_distance,
+            max_valid: args.max_valid,
+            polish_rounds: args.polish_rounds,
+            polish_candidates: args.polish_candidates,
+            append_references: args.append_references,
+            seed: args.seed,
+            time_budget: args.time_budget,
+            verbose: args.verbose,
+            xkb: args.xkb,
+            xkb_name: args.xkb_name,
+            out: args.out,
+            out_json: args.out_json,
+        }),
         Command::Render(args) => {
             let text = if args.both {
                 let ctx = context::Context::load(args.config.as_deref())?;

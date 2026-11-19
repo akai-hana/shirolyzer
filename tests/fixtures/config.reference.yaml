@@ -267,6 +267,7 @@ alt_fingers:
 #   - {type: spread, max_extra: 2.0, allow: false}
 #   - {type: separation, min_width: 1.9, fingers: [LP, LI], allow: false}
 #   - {type: crossing, deficit: 0.30, allow: false}
+# Rules apply to same-hand pairs only; cross-hand pairs are rejected.
 conditions:
   - {type: scissors, distance: half, reverse: true, pairs: [[LR, LP], [RR, RP]], allow: false}
   - {type: scissors, distance: full, reverse: true, pairs: [[LR, LP], [RR, RP]], allow: false}

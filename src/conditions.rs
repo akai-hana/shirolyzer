@@ -79,7 +79,6 @@ impl Conditions {
         if !self.matches_fingers(cond, fa, fb) || !self.matches_pairs(cond, fa, fb) {
             return false;
         }
-        let same_hand = finger_hand(fa) == finger_hand(fb);
         match cond.kind.as_str() {
             "scissors" => {
                 let drow = pf.drow;
@@ -90,9 +89,9 @@ impl Conditions {
                 };
                 matched && (!cond.reverse || pf.g < 0.0)
             }
-            "spread" => !same_hand && pf.nadj == 1 && pf.s > pf.rest_sep + cond.max_extra,
-            "separation" => !same_hand && pf.s < cond.min_width,
-            "crossing" => !same_hand && pf.nadj >= 2 && pf.s < cond.deficit + 1.0,
+            "spread" => pf.nadj == 1 && pf.s > pf.rest_sep + cond.max_extra,
+            "separation" => pf.s < cond.min_width,
+            "crossing" => pf.nadj >= 2 && pf.s < cond.deficit + 1.0,
             _ => false,
         }
     }
@@ -165,4 +164,116 @@ pub fn allowed_pair(
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::parse_finger8;
+
+    fn condition_rules() -> Vec<(&'static str, Condition)> {
+        let base = Condition {
+            kind: String::new(),
+            allow: false,
+            distance: None,
+            reverse: false,
+            fingers: None,
+            pairs: None,
+            max_extra: 2.0,
+            min_width: 1.9,
+            deficit: 0.30,
+        };
+        vec![
+            (
+                "scissors",
+                Condition {
+                    kind: "scissors".into(),
+                    distance: Some("full".into()),
+                    ..base.clone()
+                },
+            ),
+            (
+                "spread",
+                Condition {
+                    kind: "spread".into(),
+                    max_extra: 0.0,
+                    ..base.clone()
+                },
+            ),
+            (
+                "separation",
+                Condition {
+                    kind: "separation".into(),
+                    min_width: 1e9,
+                    ..base.clone()
+                },
+            ),
+            (
+                "crossing",
+                Condition {
+                    kind: "crossing".into(),
+                    deficit: 1e9,
+                    ..base
+                },
+            ),
+        ]
+    }
+
+    fn find_same_hand_match(
+        geom: &Geometry,
+        rule: &Condition,
+    ) -> Option<(usize, usize, usize, usize)> {
+        let conditions = Conditions {
+            enabled: true,
+            rules: vec![rule.clone()],
+            pair_denied: None,
+        };
+        for a in 0..NK {
+            for fa in 0..NF {
+                if finger_hand(fa) != 0 {
+                    continue;
+                }
+                for b in 0..NK {
+                    for fb in 0..NF {
+                        if finger_hand(fb) != 0 || finger_kind(fa) == finger_kind(fb) {
+                            continue;
+                        }
+                        let pf = pair_feature(geom, a, fa, b, fb);
+                        if conditions.condition_matches(rule, fa, fb, &pf) {
+                            return Some((a, fa, b, fb));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn same_hand_condition_rules_deny_matching_pairs() {
+        let geom = Geometry::new();
+        for (name, rule) in condition_rules() {
+            let (a, fa, b, fb) = find_same_hand_match(&geom, &rule)
+                .unwrap_or_else(|| panic!("no same-hand pair matches {name}"));
+            assert!(
+                !allowed_pair(&geom, &[rule], a, fa, b, fb),
+                "{name} did not deny a matching same-hand pair"
+            );
+        }
+    }
+
+    #[test]
+    fn cross_hand_pairs_bypass_condition_rules() {
+        let geom = Geometry::new();
+        let a = crate::geometry::key_index("Q").unwrap();
+        let b = crate::geometry::key_index("P").unwrap();
+        let li = parse_finger8("LI").unwrap();
+        let ri = parse_finger8("RI").unwrap();
+        for (name, rule) in condition_rules() {
+            assert!(
+                allowed_pair(&geom, &[rule], a, li, b, ri),
+                "{name} restricted a cross-hand pair"
+            );
+        }
+    }
 }

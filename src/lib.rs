@@ -16,6 +16,7 @@ pub mod gates;
 pub mod generate;
 pub mod geometry;
 pub mod hash;
+pub mod layout;
 pub mod model;
 pub mod paths;
 pub mod preferences;

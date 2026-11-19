@@ -2,14 +2,14 @@
 
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::analyze::{trigram_pattern, true_same_finger_metrics};
 use crate::context;
 use crate::corpus::SPACE_INDEX;
 use crate::geometry::{finger_token, key_index, KEYS};
 use crate::paths;
-use crate::scorer::{big_idx, tri_idx, FINGER_SLOTS, SPACE_FINGER};
+use crate::scorer::{big_idx, tri_idx, FINGER_SLOTS, SPACE_FINGER, SPACE_ID};
 
 const LETTERS: usize = 26;
 
@@ -36,6 +36,7 @@ fn keymap(layout: &str) -> [Option<usize>; LETTERS + 1] {
             map[id] = Some(key);
         }
     }
+    map[SPACE_INDEX] = Some(SPACE_ID);
     map
 }
 
@@ -169,9 +170,7 @@ pub fn run(args: WorstArgs) -> Result<()> {
             &latest
         }
     };
-    if layout.chars().count() != 30 {
-        return Err(anyhow!("layout must be 30 characters"));
-    }
+    crate::layout::validate_layout(layout).map_err(anyhow::Error::msg)?;
 
     let (corpus, labels) = if !args.primary_corpus.is_empty() {
         (

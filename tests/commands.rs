@@ -66,6 +66,85 @@ fn xkb_matches_reference() {
 }
 
 #[test]
+fn commands_reject_invalid_layouts_with_named_errors() {
+    let config = config_path();
+    for (layout, needle) in [
+        ("aacdefghijklmnopqrstuvwxyz',./", "repeats letter 'a'"),
+        (
+            "Abcdefghijklmnopqrstuvwxyz',./",
+            "unsupported character 'A'",
+        ),
+        ("ébcdefghijklmnopqrstuvwxyz',./", "non-ASCII character 'é'"),
+    ] {
+        let out = run(&["analyze", layout, "--config", config.as_str()]);
+        assert!(!out.status.success(), "{layout} was accepted");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains(needle), "{layout}: {err}");
+        assert!(!err.contains("panicked"), "{layout}: {err}");
+    }
+
+    let wordlist = tmp("invalid-layout-words.txt");
+    std::fs::write(&wordlist, "we 100\nthe 200\n").unwrap();
+    for command in ["analyze", "worst", "words"] {
+        let mut args = vec![command, "aacdefghijklmnopqrstuvwxyz',./", "--config"];
+        args.push(config.as_str());
+        if command == "words" {
+            args.extend(["--wordlist", wordlist.to_str().unwrap()]);
+        }
+        let out = run(&args);
+        assert!(
+            !out.status.success(),
+            "{command} accepted a duplicate letter"
+        );
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("repeats letter 'a'"), "{command}: {err}");
+    }
+}
+
+#[test]
+fn commands_reject_invalid_numeric_flags() {
+    let wordlist = tmp("numeric-flags.txt");
+    std::fs::write(&wordlist, "we 100\nthe 200\n").unwrap();
+    let wordlist = wordlist.to_string_lossy().into_owned();
+    let cases: Vec<(Vec<&str>, &str)> = vec![
+        (vec!["generate", "--time-budget", "-1"], "time budget"),
+        (vec!["generate", "--time-budget=0"], "greater than zero"),
+        (vec!["generate", "--time-budget=nan"], "finite"),
+        (vec!["generate", "--time-budget=inf"], "finite"),
+        (vec!["generate", "--time-budget=169h"], "7 days"),
+        (
+            vec!["generate", "--valid-tolerance", "nan"],
+            "--valid-tolerance",
+        ),
+        (
+            vec!["generate", "--secondary-tolerance", "inf"],
+            "--secondary-tolerance",
+        ),
+        (
+            vec!["generate", "--primary-sacrifice", "-1"],
+            "--primary-sacrifice",
+        ),
+        (vec!["generate", "--primary-sacrifice", "101"], "percentage"),
+        (
+            vec!["apostrophe", "--primary-tolerance", "nan"],
+            "--primary-tolerance",
+        ),
+        (
+            vec!["words", "--wordlist", &wordlist, "--min-frequency", "nan"],
+            "--min-frequency",
+        ),
+        (vec!["check-baseline", "--tolerance", "nan"], "--tolerance"),
+    ];
+    for (args, needle) in cases {
+        let out = run(&args);
+        assert!(!out.status.success(), "{args:?} was accepted");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains(needle), "{args:?}: {err}");
+        assert!(!err.contains("panicked"), "{args:?}: {err}");
+    }
+}
+
+#[test]
 fn analyze_score_matches_baseline() {
     let config = config_path();
     let path = tmp("analyze.json");

@@ -69,6 +69,7 @@ hand_restrictions:
 alt_fingers: []
 
 # Conditions are evaluated from top to bottom; the first matching entry wins.
+# Rules apply to same-hand pairs only; cross-hand pairs are rejected.
 # Kept identical to config.yaml so only the fingering mode differs.
 conditions:
   - {type: scissors, distance: half, reverse: true, pairs: [[LR, LP], [RR, RP]], allow: false}

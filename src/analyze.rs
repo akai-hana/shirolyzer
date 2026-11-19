@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde_json::json;
 
 use crate::context;
@@ -54,6 +54,14 @@ fn keymap(layout: &str) -> KeyMap {
             map[id] = Some(key);
         }
     }
+    map
+}
+
+/// Key map used by the score decomposition.  Space is not a physical layout
+/// slot, so it always resolves to the scorer's synthetic space key.
+fn score_keymap(layout: &str) -> KeyMap {
+    let mut map = keymap(layout);
+    map[crate::corpus::SPACE_INDEX] = Some(SPACE_ID);
     map
 }
 
@@ -327,8 +335,8 @@ pub fn score_breakdown(
     gates: &crate::gates::Gates,
     conditions: &crate::conditions::Conditions,
 ) -> ScoreBreakdown {
-    let m = keymap(layout);
-    let mt = model.tables_unrestricted(geom);
+    let m = score_keymap(layout);
+    let mt = tables.unrestricted.as_ref().unwrap_or(&tables.model);
     let mut out = ScoreBreakdown::default();
     let mut denom = 0.0;
     let mut pm = vec![0.0; NF * NF * NF];
@@ -349,14 +357,14 @@ pub fn score_breakdown(
             .sum::<f64>()
             * count;
         if keys.contains(&SPACE_ID) {
-            add_space_terms(&mut out, &mt, keys, fs, count);
+            add_space_terms(&mut out, mt, keys, fs, count);
             continue;
         }
         out.key_effort +=
             (mt.e[e_idx(k0, fs[0])] + mt.e[e_idx(k1, fs[1])] + mt.e[e_idx(k2, fs[2])]) * count;
         out.key_press += 3.0 * crate::scorer::PRESS * count;
-        add_pair_terms(&mut out, model, geom, &mt, k0, fs[0], k1, fs[1], count);
-        add_pair_terms(&mut out, model, geom, &mt, k1, fs[1], k2, fs[2], count);
+        add_pair_terms(&mut out, model, geom, mt, k0, fs[0], k1, fs[1], count);
+        add_pair_terms(&mut out, model, geom, mt, k1, fs[1], k2, fs[2], count);
         add_trigram_terms(
             &mut out, model, geom, tables, k0, fs[0], k1, fs[1], k2, fs[2], count,
         );
@@ -1242,9 +1250,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             &latest
         }
     };
-    if layout.chars().count() != 30 {
-        return Err(anyhow!("layout must be 30 characters"));
-    }
+    crate::layout::validate_layout(layout).map_err(anyhow::Error::msg)?;
     let out_path = args
         .out
         .map(Path::to_path_buf)
@@ -1369,8 +1375,9 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
     out("grid (QWERTY order, left/right split 5+5):".to_string());
     let chars: Vec<char> = layout.chars().collect();
     for r in 0..3 {
-        let row: String = chars[r * 10..(r + 1) * 10].iter().collect();
-        out(format!("  {} | {}", &row[..5], &row[5..]));
+        let left: String = chars[r * 10..r * 10 + 5].iter().collect();
+        let right: String = chars[r * 10 + 5..(r + 1) * 10].iter().collect();
+        out(format!("  {} | {}", left, right));
     }
     out(format!(
         "primary={:.9}  corpus={}",

@@ -6,7 +6,7 @@ use rand::Rng;
 use crate::apostrophe::ApostropheTerm;
 use crate::config::BalanceSource;
 use crate::corpus::{Corpus, SPACE_INDEX};
-use crate::geometry::{finger_hand, finger_kind, key_index, KEYS, NK};
+use crate::geometry::{finger_hand, finger_kind, key_index, KEYS, NF, NK};
 use crate::model::Model;
 use crate::scorer::{tri_idx, tri_idx_u8, Tables, SPACE_ID};
 
@@ -41,6 +41,29 @@ pub fn remap_for_layout(layout: &str) -> [i32; 27] {
     }
     remap[SPACE_INDEX] = SPACE_ID as i32;
     remap
+}
+
+/// Resolve a corpus n-gram ID against an item-key array.  Corpus IDs `0..26`
+/// are letters and `SPACE_INDEX` is the implicit space key, which is not one of
+/// the 30 physical layout slots.
+#[inline]
+pub fn corpus_key(kid: &[u8], id: usize) -> u8 {
+    if id == SPACE_INDEX {
+        SPACE_ID as u8
+    } else {
+        kid[id]
+    }
+}
+
+/// Accumulate one encoded trigger finger into a balance usage table.  Space
+/// uses the dedicated thumb sentinel, which is outside the four per-hand
+/// finger kinds tracked by the balance objective.
+#[inline]
+pub fn add_finger_usage(usage: &mut Usage, finger: u8, delta: f64) {
+    let finger = finger as usize;
+    if finger < NF {
+        usage[finger_hand(finger)][finger_kind(finger)] += delta;
+    }
 }
 
 pub fn score_layout(layout: &str, corpus: &Corpus, tables: &Tables) -> f64 {
@@ -124,7 +147,7 @@ impl<'a> Evaluator<'a> {
         let mut tri_counts = Vec::new();
         let mut inc: Vec<Vec<u32>> = vec![Vec::new(); N_ITEMS];
         for (ids, &count) in corpus.tri_ids.iter().zip(corpus.tri_counts.iter()) {
-            if ids.iter().all(|&c| c < 26) {
+            if ids.iter().all(|&c| c <= SPACE_INDEX) {
                 let k = tri_idx_slot.len() as u32;
                 tri_idx_slot.push([ids[0] as u8, ids[1] as u8, ids[2] as u8]);
                 tri_counts.push(count);
@@ -269,9 +292,9 @@ impl<'a> Evaluator<'a> {
         let mut weighted = 0.0;
         for (ids, &count) in self.tri_idx_slot.iter().zip(self.tri_counts.iter()) {
             let idx = tri_idx_u8(
-                kid[ids[0] as usize],
-                kid[ids[1] as usize],
-                kid[ids[2] as usize],
+                corpus_key(&kid, ids[0] as usize),
+                corpus_key(&kid, ids[1] as usize),
+                corpus_key(&kid, ids[2] as usize),
             );
             weighted += self.tables.tri[idx] * count;
         }
@@ -292,13 +315,12 @@ impl<'a> Evaluator<'a> {
         let mut usage = [[0.0f64; 4]; 2];
         for (ids, &count) in self.tri_idx_slot.iter().zip(self.tri_counts.iter()) {
             let idx = tri_idx_u8(
-                kid[ids[0] as usize],
-                kid[ids[1] as usize],
-                kid[ids[2] as usize],
+                corpus_key(kid, ids[0] as usize),
+                corpus_key(kid, ids[1] as usize),
+                corpus_key(kid, ids[2] as usize),
             );
             for &finger in &self.tables.tri_f[idx] {
-                let finger = finger as usize;
-                usage[finger_hand(finger)][finger_kind(finger)] += count;
+                add_finger_usage(&mut usage, finger, count);
             }
         }
         usage
@@ -324,7 +346,9 @@ impl<'a> Evaluator<'a> {
         let hl = usage[0].iter().sum::<f64>();
         let hr = usage[1].iter().sum::<f64>();
         pen += ((hl - hr) / (hl + hr).max(1e-9)).powi(2) * self.w_hand;
-        pen += balance_guard_penalty(usage, &self.flat_share);
+        if self.w_balance > 0.0 {
+            pen += balance_guard_penalty(usage, &self.flat_share);
+        }
         pen
     }
 

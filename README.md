@@ -93,6 +93,12 @@ On layout generation, it is capable of taking corpora under different weightings
 
 - **Secondary:** Any number of corpora can optionally be evaluated _after_ the initial generation ("a posteriori"). The generator then optimizes for the secondary corpora without exceeding the allowed primary sacrifice.
 
+Parsed corpora may include a literal space character in their n-grams. Space is scored as an implicit thumb key consistently by `generate`, `analyze`'s primary score, and the score breakdown; raw text sources currently split runs at non-letters, so they do not produce space n-grams.
+
+Accepted corpus inputs are a parsed directory (or its `parsed/` subdirectory) containing `letter_freq.json`, `bigram_freq.json`, and `trigram_freq.json`; a raw `.txt`, `.xz`, or `.zip` file; or, for `compare --corpus-json`, one external JSON bundle. Corpus directories must contain exactly one raw source, and ZIP archives must contain exactly one `.txt` member. All text must be valid UTF-8.
+
+Inputs are capped at 64 MiB for a compressed archive, 256 MiB for decompressed or raw text, and 64 MiB for each JSON file. Files that exceed a limit are rejected before parsing.
+
 ### Primary sacrifice
 
 `general.primary_sacrifice` accepts either a number/percentage (score only) or a mapping:
@@ -247,7 +253,9 @@ Useful flags:
   score has not strictly improved for this many consecutive batches.
 - `--time-budget` (for example `90s`, `5m`, `1h`) — stop starting new work after
   this long and report the best result so far. Runs under a time budget execute
-  sequentially instead of in parallel.
+  sequentially instead of in parallel. The value must be finite, greater than
+  zero, and no more than seven days; invalid values are rejected before work
+  starts.
 - `--valid-tolerance` (default `0.002`), `--secondary-tolerance` (default
   `0.005`), `--min-layout-distance` (default `4`), `--max-valid` (default `8`)
   — how near-equal, diverse layouts are collected into the valid-layout report.
@@ -565,8 +573,10 @@ strength contribution separately in `score_breakdown.finger_strength`. The
 separate `rest_penalty` preference is included in `key_effort`.
 
 `finger_balance` is demoted to a tie-breaker tier. It is not a primary goal,
-but a guardrail keeps every finger from being ignored: usage below half of its
-configured target receives an additional penalty.
+but when it is enabled a guardrail keeps every finger from being ignored:
+usage below half of its configured target receives an additional penalty. The
+guardrail is part of the balance objective, so it is off when `finger_balance`
+is omitted from `priority_list`.
 
 ### Preference calibration
 
@@ -627,6 +637,8 @@ must not be used to penalize context-dependent alt fingering.
 Condition rules are evaluated from top to bottom; the first matching rule wins. `allow: false` forbids a matching pattern and `allow: true` permits it. Unless `reverse: true` is specified, a scissor rule matches both regular and reverse scissors.
 
 `fingers` matches when either endpoint is in the listed set. Use `pairs` when the rule must match both endpoints exactly, for example `pairs: [[LR, LP], [RR, RP]]` for ring/pinky pairs in either direction. Pair entries must use explicit hand/finger tokens.
+
+All condition rules apply to same-hand key pairs. Cross-hand pairs are always allowed by this engine, so `pairs` must name two fingers on the same hand; cross-hand pairs are rejected at config load. A `fingers` set may list tokens from both hands because it matches either endpoint of a same-hand pair. Unsupported fields for a condition type are rejected instead of being silently ignored.
 
 The shipped condition list is a built-in default and stays disabled because the fitted model already implements those native rules. Editing the list enables the conditions engine for the edited list; the built-in defaults are kept in `src/config.rs` (and `utils/config.py`) so a config that still matches them stays disabled.
 
