@@ -95,6 +95,10 @@ On layout generation, it is capable of taking corpora under different weightings
 
 Parsed corpora may include a literal space character in their n-grams. Space is scored as an implicit thumb key consistently by `generate`, `analyze`'s primary score, and the score breakdown; raw text sources currently split runs at non-letters, so they do not produce space n-grams.
 
+Accepted corpus inputs are a parsed directory (or its `parsed/` subdirectory) containing `letter_freq.json`, `bigram_freq.json`, and `trigram_freq.json`; a raw `.txt`, `.xz`, or `.zip` file; or, for `compare --corpus-json`, one external JSON bundle. Corpus directories must contain exactly one raw source, and ZIP archives must contain exactly one `.txt` member. All text must be valid UTF-8.
+
+Inputs are capped at 64 MiB for a compressed archive, 256 MiB for decompressed or raw text, and 64 MiB for each JSON file. Files that exceed a limit are rejected before parsing.
+
 ### Primary sacrifice
 
 `general.primary_sacrifice` accepts either a number/percentage (score only) or a mapping:
