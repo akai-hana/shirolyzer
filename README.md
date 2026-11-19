@@ -262,7 +262,8 @@ Useful flags:
 - `--secondary-rounds` (default: same as `--ils`) — perturbation rounds per
   candidate in the secondary phase. `0` only scores the candidates.
 - `--seed` — reproduce a run. Without it a seed is generated and printed in the
-  header.
+  header. Per-layout `README.md` reproduction commands include the effective
+  seed, the saved config snapshot, and shell-safe quoting.
 - `--verbose` / `-v` — list every distinct layout from the anneal stage with its
   layout string instead of only the top eight.
 
