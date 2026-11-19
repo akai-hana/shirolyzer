@@ -192,9 +192,8 @@ setxkbmap -layout "$name" -print | xkbcomp "-I$xkb_dir" - "$display"
 "#;
 
 pub fn write_install_script(dir: &Path) -> Result<PathBuf> {
-    std::fs::create_dir_all(dir)?;
     let path = dir.join("install.sh");
-    std::fs::write(&path, INSTALL_SCRIPT)?;
+    crate::paths::write_atomic(&path, INSTALL_SCRIPT)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -205,9 +204,6 @@ pub fn write_install_script(dir: &Path) -> Result<PathBuf> {
 
 pub fn write(path: &Path, layout: &str, name: &str) -> Result<PathBuf> {
     let path = path.to_path_buf();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&path, symbols(layout, name)?)?;
+    crate::paths::write_atomic(&path, symbols(layout, name)?)?;
     Ok(path)
 }

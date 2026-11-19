@@ -59,6 +59,7 @@ pub struct CorpusEntry {
     pub name: Option<String>,
     pub path: Option<String>,
     pub weight: f64,
+    pub normalize: bool,
 }
 
 impl CorpusEntry {
@@ -656,8 +657,8 @@ fn normalise_corpora(path: &Path, where_: &str, value: Option<&Value>) -> Result
     let mut out = Vec::new();
     for (i, item) in items.iter().enumerate() {
         let where_i = format!("{}[{}]", where_, i);
-        let (name, path_value, weight_value) = if item.is_string() {
-            (Some(item.as_str().unwrap().to_string()), None, None)
+        let (name, path_value, weight_value, normalize_value) = if item.is_string() {
+            (Some(item.as_str().unwrap().to_string()), None, None, None)
         } else if let Some(map) = item.as_mapping() {
             let name = get(map, "name")
                 .and_then(Value::as_str)
@@ -665,7 +666,7 @@ fn normalise_corpora(path: &Path, where_: &str, value: Option<&Value>) -> Result
             let path_value = get(map, "path")
                 .and_then(Value::as_str)
                 .map(ToString::to_string);
-            (name, path_value, get(map, "weight"))
+            (name, path_value, get(map, "weight"), get(map, "normalize"))
         } else {
             return Err(fail(
                 path,
@@ -687,10 +688,15 @@ fn normalise_corpora(path: &Path, where_: &str, value: Option<&Value>) -> Result
                 "must be greater than zero",
             ));
         }
+        let normalize = match normalize_value {
+            Some(v) => as_bool(path, &format!("{}.normalize", where_i), v)?,
+            None => false,
+        };
         out.push(CorpusEntry {
             name,
             path: path_value,
             weight,
+            normalize,
         });
     }
     Ok(out)
@@ -2017,6 +2023,28 @@ mod tests {
     fn tiers(yaml: &str) -> Vec<Vec<String>> {
         let value: Value = serde_yaml::from_str(yaml).unwrap();
         parse_priority(Path::new("config.yaml"), Some(&value)).unwrap()
+    }
+
+    fn corpus_entries(yaml: &str) -> Result<Vec<CorpusEntry>> {
+        let value: Value = serde_yaml::from_str(yaml).unwrap();
+        normalise_corpora(
+            Path::new("config.yaml"),
+            "general.primary_corpus",
+            Some(&value),
+        )
+    }
+
+    #[test]
+    fn corpus_entries_support_optional_normalization() {
+        let entries = corpus_entries(
+            "[{name: shai, weight: 100}, {name: douglas, weight: 50, normalize: true}]",
+        )
+        .unwrap();
+        assert!(!entries[0].normalize);
+        assert_eq!(entries[0].weight, 100.0);
+        assert!(entries[1].normalize);
+        assert_eq!(entries[1].weight, 50.0);
+        assert!(corpus_entries("[{name: shai, normalize: sometimes}]").is_err());
     }
 
     #[test]

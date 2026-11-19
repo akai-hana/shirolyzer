@@ -1736,13 +1736,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             ));
         }
     }
-    if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&out_path, lines.join("\n") + "\n")?;
-    if let Some(parent) = out_json.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    paths::write_atomic(&out_path, lines.join("\n") + "\n")?;
     let guide_json: serde_json::Value = guide
         .iter()
         .map(|(ch, g)| {
@@ -1776,6 +1770,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
         })
         .collect();
     let payload = json!({
+        "schema_version": crate::JSON_SCHEMA_VERSION,
         "layout": layout,
         "fingering": ctx.cfg.fingering.label(),
         "primary_score": primary_score,
@@ -1855,7 +1850,7 @@ pub fn run(args: AnalyzeArgs) -> Result<()> {
             "secondary": preference_secondary.as_ref().map(|report| report.to_json()),
         },
     });
-    std::fs::write(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
+    paths::write_atomic(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
     println!("\nwrote {} and {}", out_path.display(), out_json.display());
     Ok(())
 }

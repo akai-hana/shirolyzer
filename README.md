@@ -93,9 +93,20 @@ On layout generation, it is capable of taking corpora under different weightings
 
 - **Secondary:** Any number of corpora can optionally be evaluated _after_ the initial generation ("a posteriori"). The generator then optimizes for the secondary corpora without exceeding the allowed primary sacrifice.
 
-Parsed corpora may include a literal space character in their n-grams. Space is scored as an implicit thumb key consistently by `generate`, `analyze`'s primary score, and the score breakdown; raw text sources currently split runs at non-letters, so they do not produce space n-grams.
+By default a corpus `weight` is a raw-count multiplier: counts are scaled by the weight and then merged, so a larger corpus contributes more n-grams at the same weight. Set `normalize: true` on every entry when weights should act as mixture shares instead:
 
-Accepted corpus inputs are a parsed directory (or its `parsed/` subdirectory) containing `letter_freq.json`, `bigram_freq.json`, and `trigram_freq.json`; a raw `.txt`, `.xz`, or `.zip` file; or, for `compare --corpus-json`, one external JSON bundle. Corpus directories must contain exactly one raw source, and ZIP archives must contain exactly one `.txt` member. All text must be valid UTF-8.
+```yaml
+general:
+  primary_corpus:
+    - {name: shai, weight: 1, normalize: true}
+    - {name: douglas, weight: 1, normalize: true}
+```
+
+Normalization is applied per n-gram order (letters, bigrams, and trigrams), so equal weights blend distributions independently of raw corpus size. It does not change the score of a single corpus. Corpora passed with `--primary-corpus` or `--secondary-corpus` are merged at full weight without the config-level normalization flag.
+
+Parsed corpora may include a literal space character in their n-grams. Space is scored as an implicit thumb key consistently by `generate`, `analyze`'s primary score, and the score breakdown. Raw text sources are lowercased, Unicode NFKD-normalized, stripped of combining marks, and split into maximal `[a-z]+` runs. Any remaining character outside that set breaks the run, so spaces, apostrophes, punctuation, digits, and non-Latin scripts do not create cross-boundary n-grams.
+
+Accepted corpus inputs are a parsed directory (or its `parsed/` subdirectory) containing `letter_freq.json`, `bigram_freq.json`, and `trigram_freq.json`; a raw `.txt`, `.xz`, or `.zip` file; or, for `compare --corpus-json`, one external JSON bundle. Corpus directories must contain exactly one raw source, and ZIP archives must contain exactly one `.txt` member. All text must be valid UTF-8. Parsed and external counts must be finite and non-negative, and only lowercase letters (plus spaces in bigrams and trigrams) are counted; unsupported keys are ignored before totals are computed.
 
 Inputs are capped at 64 MiB for a compressed archive, 256 MiB for decompressed or raw text, and 64 MiB for each JSON file. Files that exceed a limit are rejected before parsing.
 
@@ -239,14 +250,15 @@ with iterated local search (ILS), and then polishes the near-equal winners.
 Useful flags:
 
 - `--runs` (default `28`), `--iters` (default `200000`), `--ils` (default `8`)
-  — restart count, anneal length, and ILS rounds.
+  — restart count, anneal length, and ILS rounds. `--ils` must be at least 1.
+  `--runs 0` is valid when at least one seed layout or reference is supplied.
 - `--ils-candidates` (default `4`) — how many top layouts advance to ILS.
-  Candidates are chosen by letter placement diversity (at least four displaced
-  letter keys), so layouts that differ only in punctuation are not treated as
-  independent candidates.
-- `--batch-size` (default `8`) — random starts per batch. Batches run in
-  parallel internally and sequentially with each other, which lets the
-  stopping rules below run between batches.
+  Must be at least 1. Candidates are chosen by letter placement diversity (at
+  least four displaced letter keys), so layouts that differ only in punctuation
+  are not treated as independent candidates.
+- `--batch-size` (default `8`) — random starts per batch; must be at least 1.
+  Batches run in parallel internally and sequentially with each other, which
+  lets the stopping rules below run between batches.
 - `--stop-hits` (default `0`, disabled) — stop once the best letter placement
   has been independently reached by this many random starts.
 - `--stop-stale-batches` (default `0`, disabled) — stop once the best primary
@@ -259,10 +271,12 @@ Useful flags:
 - `--valid-tolerance` (default `0.002`), `--secondary-tolerance` (default
   `0.005`), `--min-layout-distance` (default `4`), `--max-valid` (default `8`)
   — how near-equal, diverse layouts are collected into the valid-layout report.
+  `--max-valid` must be at least 1.
 - `--secondary-rounds` (default: same as `--ils`) — perturbation rounds per
   candidate in the secondary phase. `0` only scores the candidates.
 - `--seed` — reproduce a run. Without it a seed is generated and printed in the
-  header.
+  header. Per-layout `README.md` reproduction commands include the effective
+  seed, the saved config snapshot, and shell-safe quoting.
 - `--verbose` / `-v` — list every distinct layout from the anneal stage with its
   layout string instead of only the top eight.
 
@@ -283,6 +297,12 @@ The directory name is slugged for the filesystem, so `--layout "my layout"`
 writes to `layouts/my_layout/`. `--name` is kept as an alias. Without
 `--layout`, output stays at the top level of `layouts/` as before. Generated
 layout directories are ignored by default; see `layouts/README.md`.
+
+Artifacts are written atomically (a temporary file in the destination
+directory, then a rename), so an interrupted run cannot leave a truncated text
+or JSON file behind. `generate.json` and `analysis.json` include
+`schema_version: 1`; the JSON reports from `analyze`, `audit`, `apostrophe`,
+and `words --out-json` use the same schema version.
 
 #### Starting layouts
 
@@ -343,9 +363,12 @@ instead of being fixed:
 
 The footer lists the result files (`layouts/generate_*.{txt,json}`, or
 `layouts/<name>/generate.*` with `--layout`), the `layouts/latest` layout
-pointer, any layouts appended to the references file (named from
-`--layout`/`--name`, or `shiro-<seed>` without one), and the elapsed time.
-Use `--append-references PATH` to write new references somewhere else.
+pointer, any layouts appended to a reference file when `--append-references`
+is used (named from `--layout`/`--name`, or `shiro-<seed>` without one), and
+the elapsed time. Generation does not modify any reference file by default.
+Pass `--append-references PATH` to append new references to `PATH`; a missing
+file is created atomically, and an existing file is validated before the
+search starts so malformed TOML is reported instead of overwritten.
 
 Progress bars are drawn on stderr, and only when it is a terminal. Color is used
 only when stdout is a terminal; set `NO_COLOR=1` to turn it off. Piped or

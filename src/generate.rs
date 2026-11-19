@@ -443,7 +443,10 @@ fn layout_lines(layout: &str) -> Vec<String> {
 fn corpus_summary(entries: &[crate::config::CorpusEntry]) -> String {
     entries
         .iter()
-        .map(|entry| format!("{} ({})", entry.label(), entry.weight))
+        .map(|entry| {
+            let mode = if entry.normalize { ", normalized" } else { "" };
+            format!("{} ({}{})", entry.label(), entry.weight, mode)
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -468,6 +471,95 @@ fn hand_summary(restrictions: &[Option<usize>; 26]) -> String {
     format!("left: {}; right: {}", part(left), part(right))
 }
 
+fn shell_quote(value: &str) -> String {
+    if !value.is_empty()
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./,:@%+=".contains(c))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn push_flag(parts: &mut Vec<String>, flag: &str, value: &str) {
+    parts.push(flag.to_string());
+    parts.push(shell_quote(value));
+}
+
+fn reproduction_command(args: &GenerateArgs<'_>, seed: u64, config: &Path) -> String {
+    let mut parts = vec![
+        "target/release/shirolyzer".to_string(),
+        "generate".to_string(),
+    ];
+    push_flag(&mut parts, "--config", &config.display().to_string());
+    parts.push("--seed".to_string());
+    parts.push(seed.to_string());
+    for layout in &args.seed_layout {
+        push_flag(&mut parts, "--seed-layout", layout);
+    }
+    for name in &args.seed_reference {
+        push_flag(&mut parts, "--seed-reference", name);
+    }
+    if args.seed_all_references {
+        parts.push("--seed-all-references".to_string());
+    }
+    for corpus in &args.primary_corpus {
+        push_flag(&mut parts, "--primary-corpus", corpus);
+    }
+    for corpus in &args.secondary_corpus {
+        push_flag(&mut parts, "--secondary-corpus", corpus);
+    }
+    if let Some(path) = &args.references {
+        push_flag(&mut parts, "--references", &path.display().to_string());
+    }
+    if let Some(percent) = args.primary_sacrifice {
+        parts.push("--primary-sacrifice".to_string());
+        parts.push(percent.to_string());
+    }
+    let settings = [
+        ("--runs", args.runs.to_string()),
+        ("--iters", args.iters.to_string()),
+        ("--ils", args.ils.to_string()),
+        ("--ils-candidates", args.ils_candidates.to_string()),
+        ("--batch-size", args.batch_size.to_string()),
+        ("--stop-hits", args.stop_hits.to_string()),
+        ("--stop-stale-batches", args.stop_stale_batches.to_string()),
+        ("--valid-tolerance", args.valid_tolerance.to_string()),
+        (
+            "--secondary-tolerance",
+            args.secondary_tolerance.to_string(),
+        ),
+        (
+            "--min-layout-distance",
+            args.min_layout_distance.to_string(),
+        ),
+        ("--max-valid", args.max_valid.to_string()),
+        (
+            "--polish-rounds",
+            if args.polish_rounds == usize::MAX {
+                "unlimited".to_string()
+            } else {
+                args.polish_rounds.to_string()
+            },
+        ),
+        ("--polish-candidates", args.polish_candidates.to_string()),
+    ];
+    for (flag, value) in settings {
+        parts.push(flag.to_string());
+        parts.push(value);
+    }
+    if let Some(rounds) = args.secondary_rounds {
+        parts.push("--secondary-rounds".to_string());
+        parts.push(rounds.to_string());
+    }
+    if let Some(budget) = args.time_budget {
+        parts.push("--time-budget".to_string());
+        parts.push(format!("{budget}s"));
+    }
+    parts.join(" ")
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_layout_readme(
     name: &str,
@@ -476,7 +568,6 @@ fn build_layout_readme(
     args: &GenerateArgs<'_>,
     seed: u64,
     timestamp: &str,
-    command_line: &str,
     row: &Row,
     valid_rows: &[Row],
     selection_status: &str,
@@ -578,8 +669,13 @@ fn build_layout_readme(
     let _ = writeln!(out);
 
     let dir = paths::layout_slug(name);
+    let command_line = reproduction_command(args, seed, &paths::layout_config_backup(name));
     let _ = writeln!(out, "## Reproduce\n");
     let _ = writeln!(out, "```sh\n{command_line}\n```\n");
+    let _ = writeln!(
+        out,
+        "Output-only flags are omitted so this command does not overwrite the saved artifacts.\n"
+    );
     let _ = writeln!(out, "Analyze the saved layout with the saved config:\n");
     let _ = writeln!(
         out,
@@ -733,6 +829,23 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     if let Some(budget) = args.time_budget {
         validate_time_budget(budget)?;
     }
+    for (flag, value) in [
+        ("--ils", args.ils),
+        ("--ils-candidates", args.ils_candidates),
+        ("--batch-size", args.batch_size),
+        ("--max-valid", args.max_valid),
+    ] {
+        if value == 0 {
+            anyhow::bail!("{flag} must be at least 1");
+        }
+    }
+    let refs_path = args
+        .references
+        .clone()
+        .unwrap_or_else(paths::references_file);
+    let append_path = args.append_references.clone();
+    let naming_path = append_path.as_deref().unwrap_or(&refs_path);
+    let existing_refs = references::load_references_if_present(naming_path)?;
     let ctx = Context::load(args.config)?;
     let timestamp = paths::timestamp();
     let layout_name = args.layout.clone();
@@ -741,7 +854,6 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         Some(name) => paths::layout_slug(name),
         None => timestamp.clone(),
     };
-    let command_line = std::env::args().collect::<Vec<_>>().join(" ");
     let out_path = args.out.clone().unwrap_or_else(|| match &layout_dir {
         Some(dir) => dir.join("generate.txt"),
         None => paths::result_path("generate", Some(stem.as_str()), ".txt"),
@@ -835,10 +947,6 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         None => None,
     };
 
-    let refs_path = args
-        .references
-        .clone()
-        .unwrap_or_else(paths::references_file);
     let mut seeds: Vec<(String, Vec<usize>)> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     // Reference layouts are NOT used as starting points unless explicitly
@@ -1644,21 +1752,15 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     let latest_path = paths::write_latest_layout(&final_row.layout, &timestamp)?;
 
     if let Some(name) = layout_name.as_deref() {
-        paths::ensure_parent(&paths::layout_file(name))?;
-        std::fs::write(paths::layout_file(name), format!("{}\n", final_row.layout))?;
+        paths::write_atomic(&paths::layout_file(name), format!("{}\n", final_row.layout))?;
         let dest = paths::layout_config_backup(name);
         let src = &ctx.cfg.path;
         let same = std::fs::canonicalize(src).ok() == std::fs::canonicalize(&dest).ok();
         if !same {
-            std::fs::copy(src, &dest)?;
+            paths::copy_atomic(src, &dest)?;
         }
     }
 
-    let append_path = args
-        .append_references
-        .clone()
-        .unwrap_or_else(|| refs_path.clone());
-    let existing_refs = references::load_references(Some(&append_path)).unwrap_or_default();
     let mut existing_names: std::collections::HashMap<String, String> = existing_refs
         .iter()
         .map(|r| (r.layout.clone(), r.name.clone()))
@@ -1669,22 +1771,24 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         .unwrap_or_else(|| format!("shiro-{}", seed));
     let mut added_names = Vec::new();
     for (i, row) in valid_rows.iter_mut().enumerate() {
-        let requested = if i == 0 {
-            base_name.clone()
-        } else {
-            format!("{}-{}", base_name, i + 1)
-        };
-        if let Some(added) = references::append_reference(
-            &requested,
-            &row.layout,
-            Some(row.primary),
-            row.secondary,
-            references::score_config_for(&ctx.cfg),
-            Some(seed as i64),
-            Some(&append_path),
-        )? {
-            existing_names.insert(row.layout.clone(), added.clone());
-            added_names.push(added.clone());
+        if let Some(path) = append_path.as_deref() {
+            let requested = if i == 0 {
+                base_name.clone()
+            } else {
+                format!("{}-{}", base_name, i + 1)
+            };
+            if let Some(added) = references::append_reference(
+                &requested,
+                &row.layout,
+                Some(row.primary),
+                row.secondary,
+                references::score_config_for(&ctx.cfg),
+                Some(seed as i64),
+                Some(path),
+            )? {
+                existing_names.insert(row.layout.clone(), added.clone());
+                added_names.push(added);
+            }
         }
         row.reference_name = existing_names.get(&row.layout).cloned();
     }
@@ -1726,7 +1830,13 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             secondary_paths.join(",")
         ),
         format!("references={}", refs_path.display()),
-        format!("append_references={}", append_path.display()),
+        format!(
+            "append_references={}",
+            append_path
+                .as_deref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "none".to_string())
+        ),
         format!("reference_added={}", added_name.clone().unwrap_or_default()),
         format!("references_added={}", added_names.join(",")),
         format!(
@@ -1787,14 +1897,9 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             r.layout
         ));
     }
-    if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&out_path, out_lines.join("\n") + "\n")?;
-    if let Some(parent) = out_json.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    paths::write_atomic(&out_path, out_lines.join("\n") + "\n")?;
     let payload = json!({
+        "schema_version": crate::JSON_SCHEMA_VERSION,
         "seed": seed,
         "seed_generated": seed_generated,
         "primary_corpora": primary_paths,
@@ -1853,7 +1958,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         "append_references": append_path,
         "xkb": xkb_path,
     });
-    std::fs::write(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
+    paths::write_atomic(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
     print_summary(
         &ui,
         &final_row,
@@ -1882,13 +1987,12 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             &args,
             seed,
             &timestamp,
-            &command_line,
             &final_row,
             &valid_rows,
             selection_status,
             xkb_path.as_deref(),
         );
-        std::fs::write(paths::layout_readme(name), readme)?;
+        paths::write_atomic(&paths::layout_readme(name), readme)?;
     }
 
     let rel = |p: &Path| -> String {
@@ -1909,13 +2013,15 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     println!();
     println!("{} {}", label("saved"), saved);
     println!("{} {}", label("latest"), rel(&latest_path));
-    if !added_names.is_empty() {
-        println!(
-            "{} +{} → {}",
-            label("refs"),
-            added_names.join(", +"),
-            rel(&append_path)
-        );
+    if let Some(path) = append_path.as_deref() {
+        if !added_names.is_empty() {
+            println!(
+                "{} +{} → {}",
+                label("refs"),
+                added_names.join(", +"),
+                rel(path)
+            );
+        }
     }
     if let Some(path) = xkb_path.as_ref() {
         println!("{} {}", label("xkb"), rel(path));
@@ -1982,6 +2088,103 @@ mod tests {
         assert_eq!(bump_stale(Some(3.5), 3.5, 0), 1);
         assert_eq!(bump_stale(Some(3.5), 3.5, 2), 3);
         assert_eq!(bump_stale(Some(3.5), 3.4, 2), 0);
+    }
+
+    fn reproduction_args() -> GenerateArgs<'static> {
+        GenerateArgs {
+            config: None,
+            seed_layout: vec!["ab cd".into()],
+            seed_reference: vec!["shiro".into()],
+            seed_all_references: false,
+            layout: None,
+            primary_corpus: vec!["shai".into()],
+            secondary_corpus: vec!["douglas".into()],
+            references: Some(PathBuf::from("/tmp/refs with space.toml")),
+            primary_sacrifice: Some(1.5),
+            runs: 3,
+            iters: 4,
+            ils: 5,
+            ils_candidates: 6,
+            secondary_rounds: Some(2),
+            batch_size: 7,
+            stop_hits: 8,
+            stop_stale_batches: 9,
+            valid_tolerance: 0.01,
+            secondary_tolerance: 0.02,
+            min_layout_distance: 10,
+            max_valid: 11,
+            polish_rounds: usize::MAX,
+            polish_candidates: 12,
+            append_references: None,
+            seed: Some(7),
+            time_budget: Some(1.5),
+            verbose: false,
+            xkb: false,
+            xkb_name: None,
+            out: None,
+            out_json: None,
+        }
+    }
+
+    #[test]
+    fn shell_quoting_is_safe_for_paths_and_flags() {
+        assert_eq!(shell_quote("abc-123/._"), "abc-123/._");
+        assert_eq!(shell_quote("a b"), "'a b'");
+        assert_eq!(shell_quote("it's"), "'it'\\''s'");
+        assert_eq!(shell_quote(""), "''");
+    }
+
+    #[test]
+    fn reproduction_command_includes_seed_settings_and_quotes_values() {
+        let command = reproduction_command(
+            &reproduction_args(),
+            123,
+            Path::new("layouts/my name/config.yaml.bak"),
+        );
+        assert!(command.starts_with("target/release/shirolyzer generate "));
+        assert!(command.contains("--config 'layouts/my name/config.yaml.bak'"));
+        assert!(command.contains("--seed 123"));
+        assert!(command.contains("--seed-layout 'ab cd'"));
+        assert!(command.contains("--seed-reference shiro"));
+        assert!(command.contains("--references '/tmp/refs with space.toml'"));
+        assert!(command.contains("--primary-sacrifice 1.5"));
+        assert!(command.contains("--runs 3"));
+        assert!(command.contains("--iters 4"));
+        assert!(command.contains("--ils 5"));
+        assert!(command.contains("--secondary-rounds 2"));
+        assert!(command.contains("--polish-rounds unlimited"));
+        assert!(command.contains("--time-budget 1.5s"));
+        for output in ["--layout", "--out ", "--out-json", "--xkb", "--verbose"] {
+            assert!(!command.contains(output), "command included {output}");
+        }
+    }
+
+    #[test]
+    fn generated_readme_contains_reproduce_command() {
+        let ctx = Context::load(Some(&crate::paths::config_file())).unwrap();
+        let name = "repro-test";
+        let layout = "abcdefghijklmnopqrstuvwxyz',./";
+        let row = Row::new("seed", 1.0, None, layout);
+        let readme = build_layout_readme(
+            name,
+            layout,
+            &ctx,
+            &reproduction_args(),
+            123,
+            "20260101-000000",
+            &row,
+            &[],
+            "ok",
+            None,
+        );
+        let config = crate::paths::layout_config_backup(name);
+        assert!(readme.contains(&format!(
+            "--config {}",
+            shell_quote(&config.display().to_string())
+        )));
+        assert!(readme.contains("--seed 123"));
+        assert!(readme.contains("--seed-layout 'ab cd'"));
+        assert!(readme.contains("Output-only flags are omitted"));
     }
 
     #[test]

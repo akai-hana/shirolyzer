@@ -1384,21 +1384,16 @@ pub fn run(args: AuditArgs) -> Result<()> {
         .out_json
         .map(Path::to_path_buf)
         .unwrap_or_else(|| paths::result_path("audit", args.config_name, ".json"));
-    if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&out_path, outcome.lines.join("\n") + "\n")?;
-    if let Some(parent) = out_json.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    paths::write_atomic(&out_path, outcome.lines.join("\n") + "\n")?;
     let payload = json!({
+        "schema_version": crate::JSON_SCHEMA_VERSION,
         "config": args.config_name,
         "probe_checks": {"passed": outcome.probes_passed, "total": outcome.probes_total},
         "rulings": {"passed": outcome.rulings_passed, "total": outcome.rulings_total},
         "corpora": outcome.corpora,
         "anchors": outcome.anchors,
     });
-    std::fs::write(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
+    paths::write_atomic(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
     Ok(())
 }
 

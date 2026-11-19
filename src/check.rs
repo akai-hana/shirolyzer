@@ -141,10 +141,7 @@ pub fn run(args: CheckArgs) -> Result<()> {
     let ctx = context::Context::load(args.config)?;
     let actual = collect(&ctx, &corpus_path, args.rulings)?;
     if args.write {
-        if let Some(parent) = baseline.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&baseline, serde_json::to_string_pretty(&actual)? + "\n")?;
+        paths::write_atomic(&baseline, serde_json::to_string_pretty(&actual)? + "\n")?;
         println!("wrote {}", baseline.display());
         return Ok(());
     }

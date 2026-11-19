@@ -1,6 +1,9 @@
 #![recursion_limit = "256"]
 #![allow(clippy::needless_range_loop, clippy::type_complexity)]
 
+/// Version of the JSON report schema written by the CLI report commands.
+pub const JSON_SCHEMA_VERSION: u64 = 1;
+
 pub mod analyze;
 pub mod apostrophe;
 pub mod audit;

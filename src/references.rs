@@ -63,8 +63,24 @@ pub fn load_references(path: Option<&Path>) -> Result<Vec<Reference>> {
         return Err(anyhow!("reference file not found: {}", path.display()));
     }
     let text = paths::read_to_string(&path)?;
+    parse_references(&path, &text)
+}
+
+/// Load references if the file exists, reject non-file paths, and otherwise
+/// treat a missing file as an empty reference set.
+pub fn load_references_if_present(path: &Path) -> Result<Vec<Reference>> {
+    if path.is_file() {
+        load_references(Some(path))
+    } else if path.exists() {
+        Err(anyhow!("{}: not a file", path.display()))
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+fn parse_references(path: &Path, text: &str) -> Result<Vec<Reference>> {
     let data: toml::Value =
-        toml::from_str(&text).map_err(|e| anyhow!("{}: invalid TOML: {}", path.display(), e))?;
+        toml::from_str(text).map_err(|e| anyhow!("{}: invalid TOML: {}", path.display(), e))?;
     let Some(entries) = data.get("reference") else {
         return Ok(Vec::new());
     };
@@ -200,7 +216,12 @@ pub fn append_reference(
     let path: PathBuf = path
         .map(Path::to_path_buf)
         .unwrap_or_else(paths::references_file);
-    let refs = load_references(Some(&path))?;
+    let mut text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(anyhow!("{}: {}", path.display(), error)),
+    };
+    let refs = parse_references(&path, &text)?;
     if refs.iter().any(|r| r.layout == layout) {
         return Ok(None);
     }
@@ -226,15 +247,73 @@ pub fn append_reference(
     if let Some(seed) = seed {
         lines.push(format!("seed = {}", seed));
     }
-    let mut text =
-        std::fs::read_to_string(&path).map_err(|e| anyhow!("{}: {}", path.display(), e))?;
     if !text.is_empty() && !text.ends_with('\n') {
-        lines.insert(0, String::new());
         text.push('\n');
     }
     text.push_str(&lines.join("\n"));
     text.push('\n');
-    std::fs::write(&path, text).map_err(|e| anyhow!("{}: {}", path.display(), e))?;
-    load_references(Some(&path))?;
+    parse_references(&path, &text)?;
+    paths::write_atomic(&path, text)?;
     Ok(Some(name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LAYOUT: &str = "abcdefghijklmnopqrstuvwxyz;,./";
+
+    fn temp_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("shirolyzer-refs-{}-{}", std::process::id(), label))
+    }
+
+    #[test]
+    fn append_reference_creates_missing_file() {
+        let dir = temp_dir("create");
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("refs.toml");
+
+        let name = append_reference(
+            "new",
+            LAYOUT,
+            None,
+            None,
+            ScoreConfig::Reference,
+            Some(7),
+            Some(&path),
+        )
+        .unwrap();
+
+        assert_eq!(name.as_deref(), Some("new"));
+        let refs = load_references(Some(&path)).unwrap();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].layout, LAYOUT);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn append_reference_preserves_malformed_file() {
+        let dir = temp_dir("malformed");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("refs.toml");
+        let original = "this is not valid [[[ toml";
+        std::fs::write(&path, original).unwrap();
+
+        let error = append_reference(
+            "new",
+            LAYOUT,
+            None,
+            None,
+            ScoreConfig::Reference,
+            None,
+            Some(&path),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("invalid TOML"), "{error}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

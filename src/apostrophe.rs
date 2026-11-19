@@ -487,16 +487,10 @@ pub fn run(args: ApostropheArgs<'_>) -> Result<()> {
         println!("{line}");
     }
     if let Some(path) = args.out {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, lines.join("\n") + "\n")?;
+        paths::write_atomic(path, lines.join("\n") + "\n")?;
         println!("\nwrote {}", path.display());
     }
     if let Some(path) = args.out_json {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let placements: Vec<_> = options
             .iter()
             .map(|(candidate, cost)| {
@@ -538,6 +532,7 @@ pub fn run(args: ApostropheArgs<'_>) -> Result<()> {
             })
             .collect();
         let value = json!({
+            "schema_version": crate::JSON_SCHEMA_VERSION,
             "layout": layout,
             "corpus": labels,
             "apostrophe_weight": term.weight(),
@@ -566,7 +561,7 @@ pub fn run(args: ApostropheArgs<'_>) -> Result<()> {
                 "swaps": greedy_json,
             },
         });
-        std::fs::write(path, serde_json::to_string_pretty(&value)? + "\n")?;
+        paths::write_atomic(path, serde_json::to_string_pretty(&value)? + "\n")?;
         println!("wrote {}", path.display());
     }
     Ok(())
