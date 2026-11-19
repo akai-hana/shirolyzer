@@ -289,7 +289,8 @@ alt_fingers:
 # scissors; `reverse: true` matches only the reverse direction.
 # `fingers` matches when either endpoint is in the set.  Use `pairs` for an
 # exact two-finger match, e.g. `pairs: [[LR, LP], [RR, RP]]` matches only
-# ring/pinky pairs (in either direction).
+# ring/pinky pairs (in either direction).  Rules apply to same-hand pairs only;
+# cross-hand pairs must not appear in `pairs`.
 #
 # The calibrated model already implements its native geometry rules, so this
 # list is reserved for user-added overrides.  The shipped native defaults are
