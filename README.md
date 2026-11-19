@@ -34,6 +34,7 @@
     - [Common-word analysis](#common-word-analysis)
     - [Preference metrics](#preference-metrics)
     - [Corpus provenance](#corpus-provenance)
+- [Known limitations](#known-limitations)
 - [Development](#development)
     - [Tests and the reference model](#tests-and-the-reference-model)
 
@@ -695,7 +696,7 @@ The **shirolyzer** analyzer uses the same configuration, geometry, model, and fi
   terms, the separate finger-strength objective, gate penalties, and space
   costs.
 
-`analyze` uses the most recent `generate` result when the layout argument is omitted. The same metrics drive primary-sacrifice enforcement during secondary optimization, so scores shown by the analyzer reflect the constraints the generator applied.
+`analyze` uses the most recent `generate` result when the layout argument is omitted. The analyzer and generator share the same config, model, tables, and primary-sacrifice metrics; tests pin space scoring and verify that the score breakdown reconstructs the primary score. Generated layouts still depend on the search budget, seed, and secondary objective.
 
 ### True same-finger metrics
 
@@ -825,6 +826,34 @@ to one JSON file. Search budget flags mirror `generate` (`--runs`, `--iters`,
 `analyze` records a `corpus_provenance` block for the primary and secondary corpora. Each entry names the resolved path, corpus kind, configured weight, per-file SHA-1 and combined hash, parser rule id, normalization rule, and n-gram totals. The text report prints a compact summary; `--out-json` contains the full record. Provenance is observational and never changes a score.
 
 `compare` can read an external comparison bundle with `--corpus-json FILE`. The file is a single JSON object with `letters`, `bigrams`, and `trigrams` maps from n-gram strings to counts. This is a comparison-only input: it does not replace the native parser, and the config corpora still drive generation and the shipped baseline.
+
+## Known limitations
+
+- **Repository-relative paths.** The default config, model, corpora, and
+  `layouts/` output root are resolved by `paths::repo_root()`. It searches the
+  current directory's ancestors for a directory containing both
+  `config/config.yaml` and `Cargo.toml`, then falls back to the build-time
+  repository path (`CARGO_MANIFEST_DIR`). Invoked outside a checkout, a binary
+  still uses the checkout it was built from; an installed or relocated binary
+  needs `--config` plus explicit output paths until a data-directory or
+  output-root option exists. Relative geometry and model-parameter paths in a
+  config resolve from the `config/` directory; corpus entries resolve from the
+  current directory, then the bundled `corpora/` root.
+- **XKB output is US/ANSI-specific.** `xkb` writes symbols for the hard-coded
+  US ANSI rows, includes `us(basic)`, and adds the `AC11`/`LSGT` extra keys.
+  Non-US layouts and non-ANSI physical geometry need manual adaptation. The
+  generated `install.sh` assumes X11 with `setxkbmap` and `xkbcomp`; Wayland
+  compositors are not handled.
+- **Platform support.** Linux is the primary tested platform; CI runs Ubuntu.
+  Other Unix-like systems may work but are not covered by CI. Windows is
+  untested, and the XKB install script is Unix-only.
+- **Report-only heuristics.** Shortcut, human-factors, and some worst-case
+  reports are diagnostic classifications, not scoring terms. `fixed` fingering
+  is likewise a comparison mode, not an optimization target.
+- **Corpus spaces.** Raw text splits at non-letters, and the bundled corpora
+  contain no spaces. Parsed corpora may include spaces in bigrams and trigrams;
+  those are scored as an implicit thumb key, but no default report exercises
+  that path.
 
 ## Development
 

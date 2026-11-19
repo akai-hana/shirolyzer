@@ -38,12 +38,14 @@ or that the parsed data was already unchanged.
 
 ## Totals
 
+Generated from the bundled `parsed/*.json` files:
+
 ```text
 Letters:  8,584,068
-Spaces:   1,860,626
 Bigrams:  6,723,441
 Trigrams: 4,983,706
 ```
 
 Processing: lowercase, Unicode NFKD with combining marks stripped, then
-maximal `[a-z]+` runs; non-letters break runs.
+maximal `[a-z]+` runs; non-letters break runs. Spaces are word boundaries and
+are not stored in the parsed counts.

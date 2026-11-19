@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
@@ -16,11 +16,22 @@ fn tmp(name: &str) -> PathBuf {
 }
 
 fn run(args: &[&str]) -> std::process::Output {
+    run_in(&root(), args)
+}
+
+fn run_in(dir: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_shirolyzer"))
         .args(args)
-        .current_dir(root())
+        .current_dir(dir)
         .output()
         .expect("run shirolyzer")
+}
+
+fn documented_total(text: &str, label: &str) -> u64 {
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix(label))
+        .map(|rest| rest.trim().replace(',', "").parse().unwrap())
+        .unwrap_or_else(|| panic!("README is missing a {label} total"))
 }
 
 fn stdout(out: &std::process::Output) -> String {
@@ -830,4 +841,125 @@ fn analyze_reports_configured_roll_tiers() {
     assert!(
         (cats["roll_tier_2"].as_f64().unwrap() - pair("roll_2_1") - pair("roll_3_2")).abs() < 1e-9
     );
+}
+
+#[test]
+fn corpus_readme_totals_match_parsed_files() {
+    for corpus in ["douglas", "shai"] {
+        let readme =
+            std::fs::read_to_string(root().join(format!("corpora/{corpus}/README.md"))).unwrap();
+        for (label, file) in [
+            ("Letters:", "letter"),
+            ("Bigrams:", "bigram"),
+            ("Trigrams:", "trigram"),
+        ] {
+            let documented = documented_total(&readme, label);
+            let text = std::fs::read_to_string(
+                root().join(format!("corpora/{corpus}/parsed/{file}_freq.json")),
+            )
+            .unwrap();
+            let value: Value = serde_json::from_str(&text).unwrap();
+            let parsed: u64 = value
+                .as_object()
+                .unwrap()
+                .values()
+                .map(|count| count.as_u64().unwrap())
+                .sum();
+            assert_eq!(
+                documented, parsed,
+                "{corpus} README {label} total does not match parsed/{file}_freq.json"
+            );
+        }
+    }
+}
+
+#[test]
+fn generate_help_documents_cli_defaults() {
+    let out = run(&["generate", "--help"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = stdout(&out);
+    for needle in [
+        "--runs <RUNS>",
+        "[default: 28]",
+        "--iters <ITERS>",
+        "[default: 200000]",
+        "--ils <ILS>",
+        "--ils-candidates <ILS_CANDIDATES>",
+        "[default: 4]",
+        "--valid-tolerance <VALID_TOLERANCE>",
+        "[default: 0.002]",
+        "--secondary-tolerance <SECONDARY_TOLERANCE>",
+        "[default: 0.005]",
+        "--min-layout-distance <MIN_LAYOUT_DISTANCE>",
+        "--max-valid <MAX_VALID>",
+        "--polish-rounds <POLISH_ROUNDS>",
+        "[default: unlimited]",
+    ] {
+        assert!(
+            text.contains(needle),
+            "generate --help is missing {needle:?}"
+        );
+    }
+}
+
+#[test]
+fn outside_repo_invocation_uses_build_root_for_config_and_outputs() {
+    let outside =
+        std::env::temp_dir().join(format!("shirolyzer-outside-repo-{}", std::process::id()));
+    std::fs::create_dir_all(outside.join("config")).unwrap();
+    std::fs::write(
+        outside.join("config/config.yaml"),
+        "general: {geometry: missing.yaml}\n",
+    )
+    .unwrap();
+
+    let out_txt = tmp("outside-analysis.txt");
+    let out_json = tmp("outside-analysis.json");
+    let out = run_in(
+        &outside,
+        &[
+            "analyze",
+            SHIRO,
+            "--out",
+            out_txt.to_str().unwrap(),
+            "--out-json",
+            out_json.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let value: Value = serde_json::from_str(&std::fs::read_to_string(&out_json).unwrap()).unwrap();
+    assert!(value["primary_score"].as_f64().unwrap() > 0.0);
+    let provenance = value["corpus_provenance"]["primary"][0]["path"]
+        .as_str()
+        .expect("primary provenance path");
+    assert!(
+        Path::new(provenance).starts_with(root()),
+        "outside invocation resolved corpus from {provenance}, not {}",
+        root().display()
+    );
+
+    let name = format!("outside-repo-{}", std::process::id());
+    let default_txt = shirolyzer::paths::result_path("analysis", Some(&name), ".txt");
+    let default_json = shirolyzer::paths::result_path("analysis", Some(&name), ".json");
+    let out = run_in(&outside, &["analyze", SHIRO, "--name", &name]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = stdout(&out);
+    assert!(text.contains(&default_txt.display().to_string()), "{text}");
+    assert!(default_txt.is_file(), "{}", default_txt.display());
+    assert!(default_json.is_file(), "{}", default_json.display());
+    let _ = std::fs::remove_file(default_txt);
+    let _ = std::fs::remove_file(default_json);
+    let _ = std::fs::remove_dir_all(outside);
 }
