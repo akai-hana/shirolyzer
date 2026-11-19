@@ -2641,6 +2641,48 @@ mod cross_hand_tests {
     }
 
     #[test]
+    fn fixed_config_matches_shipped_config_except_declared_differences() {
+        let base_text = std::fs::read_to_string(paths::config_file()).unwrap();
+        let fixed_path = paths::config_dir().join("config.fixed.yaml");
+        let fixed_text = std::fs::read_to_string(&fixed_path).unwrap();
+        let mut expected: Value = serde_yaml::from_str(&base_text).unwrap();
+        let fixed: Value = serde_yaml::from_str(&fixed_text).unwrap();
+
+        {
+            let root = expected.as_mapping_mut().expect("base config root");
+            root.insert(
+                Value::String("alt_fingers".into()),
+                Value::Sequence(Vec::new()),
+            );
+            let general = root
+                .get_mut(Value::String("general".into()))
+                .expect("general section")
+                .as_mapping_mut()
+                .expect("general mapping");
+            general.insert(
+                Value::String("fingering".into()),
+                Value::String("fixed".into()),
+            );
+            general.insert(
+                Value::String("rest_penalty".into()),
+                Value::Number(0.0.into()),
+            );
+            general.insert(Value::String("sfb_impossible".into()), Value::Bool(false));
+        }
+
+        assert_eq!(
+            expected, fixed,
+            "config.fixed.yaml must mirror config/config.yaml except for the documented differences"
+        );
+
+        let fixed_cfg = load(Some(&fixed_path)).unwrap();
+        assert_eq!(fixed_cfg.fingering, FingeringMode::Fixed);
+        assert_eq!(fixed_cfg.rest_penalty, 0.0);
+        assert!(!fixed_cfg.sfb_impossible);
+        assert!(fixed_cfg.alt_fingers.is_empty());
+    }
+
+    #[test]
     fn finger_strength_is_optional_and_parses_bare_and_explicit_tokens() {
         let path = Path::new("config.yaml");
         assert_eq!(parse_finger_strength(path, None).unwrap(), [0.0; NF]);

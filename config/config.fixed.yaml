@@ -1,10 +1,17 @@
 # <>|> Shirolyzer fixed-fingering config! <~=| #
 #
 # Companion to config.yaml for apples-to-apples comparisons with fixed-finger
-# analyzers such as oxeylyzer.  Every key always uses its fingermap finger and
+# analyzers such as oxeylyzer. Every key always uses its fingermap finger and
 # alt_fingers is ignored, so the finger assignment cannot vary by context.
-# Everything else (geometry, model, corpora, conditions, priorities, balance)
-# is kept in sync with config.yaml.
+#
+# This file mirrors config.yaml exactly except for four intentional
+# differences, enforced by the drift test in src/config.rs:
+#   general.fingering: fixed        (was flexible)
+#   general.rest_penalty: 0.0       (was 0.2)
+#   general.sfb_impossible: false   (was true)
+#   alt_fingers: []                 (was the flexible alt-rule list)
+# Everything else (geometry, model, corpora, conditions, priorities, tiers,
+# balance, and finger strength) stays in sync with config.yaml.
 #
 # Use it with any analysis command, for example:
 #   target/release/shirolyzer analyze 'layout' --config config/config.fixed.yaml
@@ -18,10 +25,25 @@
 general:
   # Relative paths are resolved from the config/ directory.
   geometry: geometry/ansi.yaml
-  # "fixed" uses the fingermap below for every ngram and ignores alt_fingers.
+  # Fingering mode: "fixed" always uses the fingermap below and ignores
+  # alt_fingers, which keeps comparisons with fixed-finger analyzers exact.
   fingering: fixed
-  # Kept at 0 for apples-to-apples external comparisons.
+  # Extra cost per keystroke typed with a non-default finger in flexible mode.
+  # 0 preserves the calibrated behavior; raising it rewards layouts that stay
+  # close to the fingermap and therefore hold up better under fixed fingering.
+  alt_finger_penalty: 0.0
+  # Extra key-effort cost per stroke on a key that is not a rest key.  Kept at
+  # 0 here so comparisons with external fixed-fingering analyzers remain
+  # apples-to-apples; the flexible config calibrates it to 0.2.  Scissor
+  # severity bands still use the geometry-only key cost.
   rest_penalty: 0.0
+  # Fixed comparisons need ordinary SFB costs rather than the hard-SFB
+  # constraint, so this stays false here; the flexible config sets true.
+  sfb_impossible: false
+  # Non-letter characters placed by generate.  Letters occupy the other 26
+  # physical keys, so these four characters are permuted across the remaining
+  # positions.  analyze uses the most recent generate result when --layout is
+  # omitted.
   punctuation: "',./"
   # Apostrophe n-grams are a secondary objective.  Weights are relative
   # frequency proxies; `weight` scales the normalized average n-gram cost.
@@ -54,7 +76,12 @@ general:
     finger_balance: 1%
 
 model:
+  # Model coefficients: the fitted, audited reference.  Personal roll
+  # preferences live in `roll_tiers` below, not in the parameter file.
   parameters_file: model/calibrated.json
+  # The reverse-scissor list names finger pairs whose full-span reverse scissors
+  # are disallowed; MR means middle/ring (both directions), and an empty list
+  # leaves all pairs to the fitted geometry.
   disallow_reverse_scissors: [MR]
 
 fingermap: |
@@ -62,17 +89,35 @@ fingermap: |
   LP LR LM LI LI  RI RI RM RR RP
   LP LR LI LI LI  RI RI RR RR RP
 
-# Optional search restriction, mirrored from config.yaml.
+# Optional search restriction: characters listed under `left` or `right` may
+# only be placed on keys of that hand by `compute`. Unlisted characters are
+# free. Empty lists disable the restriction.
 hand_restrictions:
-  left: [z, x, c, v]
+  left: [z, x, c, v, t, y]
   right: []
 
-# Fixed mode ignores alt rules; an empty list keeps the intent explicit.
+# Fixed mode ignores alt rules; an empty list keeps that intent explicit and
+# keeps this config permissive for external comparisons.
 alt_fingers: []
 
 # Conditions are evaluated from top to bottom; the first matching entry wins.
-# Rules apply to same-hand pairs only; cross-hand pairs are rejected.
-# Kept identical to config.yaml so only the fingering mode differs.
+# `allow: false` forbids a matching scissor, `allow: true` permits it.
+# If `reverse` is omitted or false, the rule matches both regular and reverse
+# scissors; `reverse: true` matches only the reverse direction.
+# `fingers` matches when either endpoint is in the set.  Use `pairs` for an
+# exact two-finger match, e.g. `pairs: [[LR, LP], [RR, RP]]` matches only
+# ring/pinky pairs (in either direction).  Rules apply to same-hand pairs only;
+# cross-hand pairs must not appear in `pairs`.
+#
+# The calibrated model already implements its native geometry rules, so this
+# list is reserved for user-added overrides.  The shipped native defaults are
+# kept here for reference (they are not active unless copied into the list):
+#   - {type: scissors, distance: full, reverse: true, fingers: [LP, LR, LM, RM, RR, RP], allow: false}
+#   - {type: scissors, distance: half, fingers: [LP, RP], allow: false}
+#   - {type: scissors, distance: half, allow: true}
+#   - {type: spread, max_extra: 2.0, allow: false}
+#   - {type: separation, min_width: 1.9, fingers: [LP, LI], allow: false}
+#   - {type: crossing, deficit: 0.30, allow: false}
 conditions:
   - {type: scissors, distance: half, reverse: true, pairs: [[LR, LP], [RR, RP]], allow: false}
   - {type: scissors, distance: full, reverse: true, pairs: [[LR, LP], [RR, RP]], allow: false}
@@ -86,13 +131,14 @@ conditions:
 # multipliers are printed at the top of every `compute` run.
 #
 # Avoid, worst first: SFBs/SFTs, then scissors, then redirects.
-# Seek: rolls together with finger strength (finger_balance), then alternation.
+# Seek: rolls first, then alternation; finger balance is only a tie-breaker
+# guardrail so no finger is ignored entirely.
 priority_list:
   - sfbs-sfts # same-finger bigrams/trigrams: the unavoidable devil
   - scissors # awkward stretches; harmless ones already cost nothing
   - redirects # flow breakers, worst to least bad (see redirect_tiers)
-  - [rolls, finger_balance] # comfortable rolls, carried by the strong fingers
-  - alternation # nice to have, one tier below rolls
+  - rolls # comfortable rolls, carried by the strong fingers
+  - [alternation, finger_balance] # nice-to-have flow and balance guardrail
 
 # Redirect preferences. Tiers are ordered from most preferred (tier 1) to most
 # avoided (last tier). Fingers are numbered per hand: 1=index, 2=middle,
@@ -100,27 +146,64 @@ priority_list:
 # third fingers differ in direction from the middle (for example 1-2-1).
 # Unlisted same-hand turns keep the legacy redirect cost.
 redirect_tiers:
-  - ["1-2-1", "2-1-2", "1-3-1", "3-1-3"]
-  - ["3-2-3"]
-  - ["2-1-3", "3-1-2", "2-3-2", "1-4-1"]
-  - ["4-1-4", "4-2-4", "2-4-2"]
-  - ["3-4-3", "4-3-4", "3-2-4", "4-2-3"]
+  - ["1-3-2", "3-1-2"] # free: the common index/ring/middle turn
+  - ["1-2-1", "2-1-2", "1-3-1", "3-1-3"] # former tier 1, now a tie-breaker
+  - ["3-2-3", "2-3-2"] # former tier 2 plus 2-3-2
+  - ["2-1-3", "1-4-1"] # former tier 3
+  - ["4-1-4", "4-2-4", "2-4-2"] # former tier 4
+  - ["3-4-3", "4-3-4", "3-2-4", "4-2-3", "3-1-4"] # former tier 5 plus 3-1-4
 
-# Extra multiplier on every redirect cost, on top of the `redirects` priority
-# tier (1.0 = none).  The tier weights alone leave redirects cheap next to the
-# roll and alternation rewards, and the best layouts then carry about 5.5% of
-# trigrams as redirects; 3.0 brings that down to about 2.5% (stable up to 3.5).
-redirect_scale: 3.0
+# Per-tier redirect costs, aligned with redirect_tiers above.  These replace
+# the old global redirect_scale: the new first tier is free, the next two are
+# small tie-breakers (kept larger than the old 0.01 gap so they still order
+# cleanly), and each later tier is progressively more expensive.  Unlisted
+# turns are charged the worst configured tier.  The `redirects` priority
+# multiplier still applies on top of these weights.
+redirect_tier_weights: [0.0, 0.05, 0.10, 2.0, 3.5, 5.0]
 
 # Roll preferences.  Tiers run from most preferred (tier 1) to least preferred.
+# `roll_scale` (top-level, default 1.0) multiplies roll credits only; it leaves
+# the separate leap penalty at the `rolls` priority level.  Set it below 1.0
+# (e.g. 0.5, or 0.0 to switch roll credit off) for controlled roll sweeps.
 # Each entry is a directed same-hand finger pair "from-to" using per-hand
 # ranks: 1=index, 2=middle, 3=ring, 4=pinky, so "1-2" is index then middle and
 # "2-1" is middle then index.  Only neighbouring fingers can roll.  With N
 # tiers, tier t (0 = highest) earns a roll credit of -0.60 * (N - t) / N per
 # pair, scaled by the `rolls` priority.  Listed pairs replace the model's own
-# roll weight (r_MI, r_RM_*, r_PR_*); unlisted pairs keep it.
+# roll weight (r_MI, r_RM_*, r_PR_*); unlisted pairs keep it.  The model's
+# unlisted bias grows with the weaker finger: index<->middle is a tie,
+# ring->middle is slightly preferred, and pinky->ring is strongly preferred.
 roll_tiers:
   - ["1-2", "2-1"]
+
+# Optional SFS finger-pattern tiers.  An SFS is a triple whose first and third
+# physical fingers match; the middle finger differs or is the same finger type
+# on the other hand (for example "1-2-1" or "1-1-1").  The repeated outer
+# finger fixes the hand; a cross-hand middle alt contributes its finger rank.
+# Patterns use per-hand ranks 1=index, 2=middle, 3=ring, 4=pinky.
+# `sfs_tier_weights` are multipliers on the distance-dependent base SFS cost,
+# not absolute costs, and must increase strictly from the best tier to the
+# worst.  Unlisted patterns keep a multiplier of 1.0.  The shipped config
+# leaves this unset, so the fitted near/far SFS cost is unchanged.  Experiment
+# with a complete table:
+# sfs_tiers:
+#   - ["1-2-1"]
+#   - ["2-1-2", "2-3-2", "3-2-3", "1-1-1", "2-2-2"]
+#   - ["1-3-1", "3-1-3"]
+#   - ["1-4-1", "4-1-4", "2-4-2", "4-2-4", "3-3-3"]
+#   - ["3-4-3", "4-3-4", "4-4-4"]
+# sfs_tier_weights: [0.8, 1.0, 1.2, 1.6, 2.0]
+
+# Scissor severity bands, mild to extreme.  Each band's multiplier scales the
+# pair strain before the `scissors` priority is applied.  Bands are defined by
+# base strain thresholds: mild < 3, moderate < 5, severe < 8, extreme >= 8.
+# Weight the extreme band about as strongly as an SFB/SFT, and keep milder
+# bands progressively cheaper.  Every band must be named if the list is used.
+scissor_tiers:
+  - {band: mild, multiplier: 0.50}
+  - {band: moderate, multiplier: 0.75}
+  - {band: severe, multiplier: 1.00}
+  - {band: extreme, multiplier: 0.12}
 
 # Target share of strokes per finger in percent. The calibrated model uses the
 # same target for both hands: P 9%, R 12.5%, M 14%, I 14.5%.
@@ -134,3 +217,27 @@ finger_balance:
   RM: 14
   RI: 14.5
 # = 100
+
+# Which fingering supplies the finger-balance loads.  "chosen" uses the same
+# trigram-DP fingers reported by `analyze`, including allowed alt_fingers and
+# reachable alternatives; "default" uses the physical fingermap only.  Both
+# respect allow/block and reachability.  The penalty is switched off when
+# finger_balance is missing from priority_list.
+finger_balance_source: chosen
+
+# Frequency-weighted finger-strength objective.  This is a separate scoring
+# term, not part of travel geometry: frequent letters, bigrams, and trigrams
+# pay it according to the fingers the DP chooses.  Higher values steer work
+# away from weak fingers.  Bare P/R/M/I apply the same strength to both hands;
+# explicit LP/LR/LM/LI/RP/RR/RM/RI override one hand.  Values must be
+# non-negative and default to 0 (off).  Anatomical ordering here is
+# pinky > ring > middle > index cost (index/middle are strongest).  These
+# values were retained after the final P9 sweep in
+# config/preference_variants.yaml: weaker or stronger vectors reduced redirects
+# only by raising the higher-priority mild-scissor cost, and the softer
+# redirect alternative traded a lower scissor cost for a higher redirect rate.
+finger_strength:
+  P: 0.45
+  R: 0.25
+  M: 0.10
+  I: 0.05

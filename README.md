@@ -224,7 +224,10 @@ comparisons with external fixed-fingering analyzers remain apples-to-apples.
 Two configs are shipped:
 
 - `config/config.yaml` — flexible (the default).
-- `config/config.fixed.yaml` — fixed physical/default fingering with no alt rules.
+- `config/config.fixed.yaml` — fixed physical/default fingering with no alt rules
+  and no hard-SFB constraint. It mirrors `config.yaml` except for those
+  intentional differences (plus `rest_penalty: 0.0`), and a drift test enforces
+  that.
 
 Switch between them with `--config`:
 
