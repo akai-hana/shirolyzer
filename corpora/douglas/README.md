@@ -2,6 +2,9 @@
 
 Source: <https://zenodo.org/records/5501931>
 Direct Download Link: <https://zenodo.org/records/5501931/files/Spanish-Keyboard-Corpus-1.0.0.zip?download=1>
+License: CC BY 4.0 — <https://creativecommons.org/licenses/by/4.0/>
+Attribution: Ian Douglas (2021), DOI <https://doi.org/10.5281/zenodo.5501931>.
+The parsed counts are derived data; cite the DOI when reusing them.
 
 ---
 
