@@ -34,6 +34,7 @@
     - [Common-word analysis](#common-word-analysis)
     - [Preference metrics](#preference-metrics)
     - [Corpus provenance](#corpus-provenance)
+- [Known limitations](#known-limitations)
 - [Development](#development)
     - [Tests and the reference model](#tests-and-the-reference-model)
 
@@ -224,7 +225,10 @@ comparisons with external fixed-fingering analyzers remain apples-to-apples.
 Two configs are shipped:
 
 - `config/config.yaml` — flexible (the default).
-- `config/config.fixed.yaml` — fixed physical/default fingering with no alt rules.
+- `config/config.fixed.yaml` — fixed physical/default fingering with no alt rules
+  and no hard-SFB constraint. It mirrors `config.yaml` except for those
+  intentional differences (plus `rest_penalty: 0.0`), and a drift test enforces
+  that.
 
 Switch between them with `--config`:
 
@@ -692,7 +696,7 @@ The **shirolyzer** analyzer uses the same configuration, geometry, model, and fi
   terms, the separate finger-strength objective, gate penalties, and space
   costs.
 
-`analyze` uses the most recent `generate` result when the layout argument is omitted. The same metrics drive primary-sacrifice enforcement during secondary optimization, so scores shown by the analyzer reflect the constraints the generator applied.
+`analyze` uses the most recent `generate` result when the layout argument is omitted. The analyzer and generator share the same config, model, tables, and primary-sacrifice metrics; tests pin space scoring and verify that the score breakdown reconstructs the primary score. Generated layouts still depend on the search budget, seed, and secondary objective.
 
 ### True same-finger metrics
 
@@ -823,7 +827,51 @@ to one JSON file. Search budget flags mirror `generate` (`--runs`, `--iters`,
 
 `compare` can read an external comparison bundle with `--corpus-json FILE`. The file is a single JSON object with `letters`, `bigrams`, and `trigrams` maps from n-gram strings to counts. This is a comparison-only input: it does not replace the native parser, and the config corpora still drive generation and the shipped baseline.
 
+## Known limitations
+
+- **Repository-relative paths.** The default config, model, corpora, and
+  `layouts/` output root are resolved by `paths::repo_root()`. It searches the
+  current directory's ancestors for a directory containing both
+  `config/config.yaml` and `Cargo.toml`, then falls back to the build-time
+  repository path (`CARGO_MANIFEST_DIR`). Invoked outside a checkout, a binary
+  still uses the checkout it was built from; an installed or relocated binary
+  needs `--config` plus explicit output paths until a data-directory or
+  output-root option exists. Relative geometry and model-parameter paths in a
+  config resolve from the `config/` directory; corpus entries resolve from the
+  current directory, then the bundled `corpora/` root.
+- **XKB output is US/ANSI-specific.** `xkb` writes symbols for the hard-coded
+  US ANSI rows, includes `us(basic)`, and adds the `AC11`/`LSGT` extra keys.
+  Non-US layouts and non-ANSI physical geometry need manual adaptation. The
+  generated `install.sh` assumes X11 with `setxkbmap` and `xkbcomp`; Wayland
+  compositors are not handled.
+- **Platform support.** Linux is the primary tested platform; CI runs Ubuntu.
+  Other Unix-like systems may work but are not covered by CI. Windows is
+  untested, and the XKB install script is Unix-only.
+- **Report-only heuristics.** Shortcut, human-factors, and some worst-case
+  reports are diagnostic classifications, not scoring terms. `fixed` fingering
+  is likewise a comparison mode, not an optimization target.
+- **Corpus spaces.** Raw text splits at non-letters, and the bundled corpora
+  contain no spaces. Parsed corpora may include spaces in bigrams and trigrams;
+  those are scored as an implicit thumb key, but no default report exercises
+  that path.
+
 ## Development
+
+### Toolchain and CI
+
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, Clippy with
+`-D warnings`, the release test suite, and the Python development-tool
+compile/import checks. `rust-toolchain.toml` pins Rust 1.99.1, and
+`requirements.txt` pins the Python tooling dependencies.
+
+Build artifacts stay in Cargo's `target/` directory for the checkout. If you
+reuse a copied `target/` or work in a shared tree with different file
+ownership, point Cargo at a fresh directory to rule out stale-artifact
+failures:
+
+```sh
+CARGO_TARGET_DIR=/tmp/shirolyzer-target cargo test --release
+```
 
 ### Tests and the reference model
 
@@ -839,6 +887,24 @@ Editing `config/config.yaml` or the priority tiers therefore never breaks
 the suite. Only change the fixture, and regenerate the baselines
 (`target/release/shirolyzer check-baseline --write`), when you deliberately
 change what the reference model measures.
+
+### Performance checks
+
+`just bench` runs the scoring and search benchmark. `just bench-check` sets
+`SHIROLYZER_BENCH_ASSERT=1`, which applies generous regression ceilings to the
+table build, full score, delta swap, quench, full-score quench, anneal, and ILS
+round timings. The ceilings are intentionally loose so they catch order-of-
+magnitude regressions without failing on normal machine variance. Record the
+printed timings with any performance change; the current release reference is
+roughly a 0.1 s table build, 70 ms delta-table build, 75 us full score, 13 us
+delta swap, 0.9 s quench, 6.6 s full-score quench, and 36k anneal iterations
+per second on the development machine.
+
+### License
+
+The Rust runtime, development tooling, and shipped configuration are MIT
+licensed; see [LICENSE](LICENSE). Bundled corpora have their own provenance and
+licensing terms documented in [corpora/README.md](corpora/README.md).
 
 ---
 

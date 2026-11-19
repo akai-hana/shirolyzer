@@ -2,6 +2,9 @@
 
 Source: <https://zenodo.org/records/5501931>
 Direct Download Link: <https://zenodo.org/records/5501931/files/Spanish-Keyboard-Corpus-1.0.0.zip?download=1>
+License: CC BY 4.0 — <https://creativecommons.org/licenses/by/4.0/>
+Attribution: Ian Douglas (2021), DOI <https://doi.org/10.5281/zenodo.5501931>.
+The parsed counts are derived data; cite the DOI when reusing them.
 
 ---
 
@@ -35,12 +38,14 @@ or that the parsed data was already unchanged.
 
 ## Totals
 
+Generated from the bundled `parsed/*.json` files:
+
 ```text
 Letters:  8,584,068
-Spaces:   1,860,626
 Bigrams:  6,723,441
 Trigrams: 4,983,706
 ```
 
 Processing: lowercase, Unicode NFKD with combining marks stripped, then
-maximal `[a-z]+` runs; non-letters break runs.
+maximal `[a-z]+` runs; non-letters break runs. Spaces are word boundaries and
+are not stored in the parsed counts.

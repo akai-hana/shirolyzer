@@ -29,6 +29,14 @@ dev-tools:
     {{python}} -m compileall -q fitting utils corpora
     {{python}} -c "import fitting, utils.fitlib, utils.gateset"
 
+# Run the search/scoring benchmark
+bench:
+    cargo bench --manifest-path {{manifest}} --bench score
+
+# Run the benchmark with generous regression ceilings
+bench-check:
+    SHIROLYZER_BENCH_ASSERT=1 cargo bench --manifest-path {{manifest}} --bench score
+
 # Run the full local verification suite
 check: test dev-tools
     cargo fmt --manifest-path {{manifest}} --check

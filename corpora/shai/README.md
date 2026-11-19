@@ -2,6 +2,11 @@
 
 Source: [AKL (Alt Keyboard Layouts) Discord server](https://discord.gg/kXyGkVaez)
 Direct Download Link: <https://colemak.com/pub/corpus/iweb-corpus-samples-cleaned.txt.xz>
+License: no explicit license is included with the sample. The bundled parsed
+counts are derived data from the community sample; confirm the upstream terms
+before redistributing the raw corpus.
+Attribution: credit Shai and the AKL community, and note the underlying iWeb
+sample when publishing results derived from it.
 
 ## Build
 
@@ -24,11 +29,15 @@ or that the parsed data was already unchanged.
 
 ## Totals
 
+Generated from the bundled `parsed/*.json` files:
+
 ```text
 Letters:  418,381,828
 Bigrams:  327,253,737
 Trigrams: 240,524,895
-Runs:      91,128,091
 ```
+
+The parser also counts 91,128,091 raw `[a-z]+` runs while scanning; run counts
+are not stored in the parsed JSON.
 
 Processing: lowercase, maximal `[a-z]+` runs; non-letters break runs.

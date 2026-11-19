@@ -249,16 +249,100 @@ impl<'a> Local<'a> {
         self.ev.penalty(&perm)
     }
 
-    fn usage_after(&mut self, swaps: &[(usize, usize)]) -> Usage {
+    fn usage_delta_swap(&mut self, i: usize, j: usize) -> Usage {
+        let base = self.usage.expect("usage tracked");
+        let after = self.usage_after(&[(i, j)]);
+        let mut delta = after;
+        for hand in 0..2 {
+            for finger in 0..4 {
+                delta[hand][finger] -= base[hand][finger];
+            }
+        }
+        delta
+    }
+
+    fn usage_cross(&mut self, i1: usize, j1: usize, i2: usize, j2: usize, list: &[u16]) -> Usage {
+        let mut delta = [[0.0; 4]; 2];
+        if list.is_empty() {
+            return delta;
+        }
+        let mut kid1 = self.kid;
+        kid1[i1] = self.kid[j1];
+        kid1[j1] = self.kid[i1];
         let mut kid2 = self.kid;
-        let mut changed = Vec::with_capacity(swaps.len() * 2);
+        kid2[i2] = self.kid[j2];
+        kid2[j2] = self.kid[i2];
+        let mut kid12 = kid1;
+        kid12[i2] = kid1[j2];
+        kid12[j2] = kid1[i2];
+        for &t in list {
+            let t = t as usize;
+            let ids = self.ev.tri_idx_slot[t];
+            let a = ids[0] as usize;
+            let b = ids[1] as usize;
+            let c = ids[2] as usize;
+            let old = self.ev.tables.tri_f[tri_idx_u8(
+                corpus_key(&self.kid, a),
+                corpus_key(&self.kid, b),
+                corpus_key(&self.kid, c),
+            )];
+            let only1 = self.ev.tables.tri_f[tri_idx_u8(
+                corpus_key(&kid1, a),
+                corpus_key(&kid1, b),
+                corpus_key(&kid1, c),
+            )];
+            let only2 = self.ev.tables.tri_f[tri_idx_u8(
+                corpus_key(&kid2, a),
+                corpus_key(&kid2, b),
+                corpus_key(&kid2, c),
+            )];
+            let both = self.ev.tables.tri_f[tri_idx_u8(
+                corpus_key(&kid12, a),
+                corpus_key(&kid12, b),
+                corpus_key(&kid12, c),
+            )];
+            let count = self.ev.tri_counts[t];
+            for pos in 0..3 {
+                add_finger_usage(&mut delta, old[pos], count);
+                add_finger_usage(&mut delta, only1[pos], -count);
+                add_finger_usage(&mut delta, only2[pos], -count);
+                add_finger_usage(&mut delta, both[pos], count);
+            }
+        }
+        delta
+    }
+
+    fn penalty_after_two(&self, d1: &Usage, d2: &Usage, cross: &Usage) -> f64 {
+        let mut usage = self.usage.expect("usage tracked");
+        for hand in 0..2 {
+            for finger in 0..4 {
+                usage[hand][finger] += d1[hand][finger] + d2[hand][finger] + cross[hand][finger];
+            }
+        }
+        self.ev.penalty_from_usage(&usage)
+    }
+
+    fn usage_after(&mut self, swaps: &[(usize, usize)]) -> Usage {
+        debug_assert!(swaps.len() * 2 <= 8);
+        let mut kid2 = self.kid;
+        let mut changed = [0usize; 8];
+        let mut changed_len = 0;
         for &(i, j) in swaps {
             kid2.swap(i, j);
-            changed.push(i);
-            changed.push(j);
+            changed[changed_len] = i;
+            changed[changed_len + 1] = j;
+            changed_len += 2;
         }
+        let changed = &mut changed[..changed_len];
         changed.sort_unstable();
-        changed.dedup();
+        let mut unique = 0;
+        for i in 0..changed.len() {
+            if unique == 0 || changed[unique - 1] != changed[i] {
+                changed[unique] = changed[i];
+                unique += 1;
+            }
+        }
+        let changed = &changed[..unique];
         self.stamp = self.stamp.wrapping_add(1);
         if self.stamp == 0 {
             self.seen.fill(0);
@@ -266,7 +350,7 @@ impl<'a> Local<'a> {
         }
         let stamp = self.stamp;
         let mut usage = self.usage.expect("usage tracked");
-        for &letter in &changed {
+        for &letter in changed {
             let list = &self.ev.inc[letter];
             for &t in list {
                 let t = t as usize;
@@ -494,15 +578,13 @@ pub fn anneal(
     t0: f64,
     t1: f64,
     seed: u64,
-) -> (Vec<usize>, f64) {
+) -> anyhow::Result<(Vec<usize>, f64)> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
     let perm = match seed_perm {
         Some(p) => p.to_vec(),
-        None => ev.constrained_shuffle(&mut rng).unwrap_or_else(|_| {
-            let mut p: Vec<usize> = (0..N_ITEMS).collect();
-            p.shuffle(&mut rng);
-            p
-        }),
+        None => ev
+            .constrained_shuffle(&mut rng)
+            .map_err(anyhow::Error::msg)?,
     };
     let mut st = Local::new(ev, &perm);
     let mut cur = st.score();
@@ -540,7 +622,7 @@ pub fn anneal(
             st.undo_swap(i, j, w0, kid0, u0);
         }
     }
-    (best, best_s)
+    Ok((best, best_s))
 }
 
 pub fn quench(
@@ -580,6 +662,7 @@ pub fn quench(
     {
         let mut order: Vec<u32> = (0..m.two.len() as u32).collect();
         let mut cache: Vec<Option<f64>> = vec![None; m.pairs.len()];
+        let mut usage_cache: Vec<Option<Usage>> = vec![None; m.pairs.len()];
         let mut changed = true;
         while changed {
             changed = false;
@@ -609,7 +692,28 @@ pub fn quench(
                     }
                 };
                 let dc = st.delta_cross(i1, j1, i2, j2, tables.get(mi));
-                let pen = st.penalty_after(&[(i1, j1), (i2, j2)]);
+                let pen = if st.usage.is_some() {
+                    let u1 = match usage_cache[p1] {
+                        Some(v) => v,
+                        None => {
+                            let v = st.usage_delta_swap(i1, j1);
+                            usage_cache[p1] = Some(v);
+                            v
+                        }
+                    };
+                    let u2 = match usage_cache[p2] {
+                        Some(v) => v,
+                        None => {
+                            let v = st.usage_delta_swap(i2, j2);
+                            usage_cache[p2] = Some(v);
+                            v
+                        }
+                    };
+                    let cross = st.usage_cross(i1, j1, i2, j2, tables.get(mi));
+                    st.penalty_after_two(&u1, &u2, &cross)
+                } else {
+                    st.penalty_after(&[(i1, j1), (i2, j2)])
+                };
                 let s = cur + (d1 + d2 + dc) / ev.n_tri + (pen - st.pen);
                 if s < cur - 1e-12 {
                     st.swap(i1, j1);
@@ -617,6 +721,7 @@ pub fn quench(
                     cur = s;
                     changed = true;
                     cache.fill(None);
+                    usage_cache.fill(None);
                 }
             }
         }
@@ -662,17 +767,17 @@ pub fn delta_swap_cost(ev: &Evaluator, perm: &[usize], reps: usize) -> (f64, usi
     (sum, reps * N_ITEMS * (N_ITEMS - 1) / 2)
 }
 
-fn improve<F, U>(
+fn improve<const N: usize, F, U>(
     ev: &impl ScoreFn,
     perm: &mut Vec<usize>,
     cur_s: &mut f64,
     rng: &mut impl Rng,
-    moves: &mut [Vec<usize>],
+    moves: &mut [[usize; N]],
     mut apply: F,
     mut undo: U,
 ) where
-    F: FnMut(&mut Vec<usize>, &[usize]) -> Option<Vec<usize>>,
-    U: FnMut(&mut Vec<usize>, &[usize], Option<Vec<usize>>),
+    F: FnMut(&mut Vec<usize>, &[usize; N]) -> Option<[usize; N]>,
+    U: FnMut(&mut Vec<usize>, &[usize; N], Option<[usize; N]>),
 {
     let mut changed = true;
     while changed {
@@ -702,32 +807,10 @@ pub fn quench_generic(
     let mut perm = perm.to_vec();
     let mut cur_s = cur_s;
 
-    let mut pairs: Vec<Vec<usize>> = Vec::new();
-    for i in 0..N_ITEMS {
-        for j in i + 1..N_ITEMS {
-            pairs.push(vec![i, j]);
-        }
-    }
-
-    let mut two: Vec<Vec<usize>> = Vec::new();
-    for x in 0..pairs.len() {
-        let (i1, j1) = (pairs[x][0], pairs[x][1]);
-        for y in x + 1..pairs.len() {
-            let (i2, j2) = (pairs[y][0], pairs[y][1]);
-            if i1 != i2 && i1 != j2 && j1 != i2 && j1 != j2 {
-                two.push(vec![i1, j1, i2, j2]);
-            }
-        }
-    }
-
-    let mut three: Vec<Vec<usize>> = Vec::new();
-    for i in 0..N_ITEMS {
-        for j in i + 1..N_ITEMS {
-            for k in j + 1..N_ITEMS {
-                three.push(vec![i, j, k]);
-            }
-        }
-    }
+    let m = moves();
+    let mut pairs = m.pairs.to_vec();
+    let mut two = m.two.to_vec();
+    let mut three = m.three.to_vec();
 
     improve(
         ev,
@@ -766,7 +849,7 @@ pub fn quench_generic(
         rng,
         &mut three,
         |p, m| {
-            let state = vec![p[m[0]], p[m[1]], p[m[2]]];
+            let state = [p[m[0]], p[m[1]], p[m[2]]];
             p[m[0]] = state[1];
             p[m[1]] = state[2];
             p[m[2]] = state[0];
@@ -899,21 +982,6 @@ pub fn quench_constrained(
     (s.perm, cur)
 }
 
-pub fn perturb(perm: &[usize], rng: &mut impl Rng, k: usize) -> Vec<usize> {
-    let mut cand = perm.to_vec();
-    let mut idx: Vec<usize> = (0..N_ITEMS).collect();
-    idx.shuffle(rng);
-    let moved = &idx[..(2 * k).min(idx.len())];
-    let mut a = 0;
-    while a + 1 < moved.len() {
-        let i = moved[a];
-        let j = moved[a + 1];
-        cand.swap(i, j);
-        a += 2;
-    }
-    cand
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -986,7 +1054,7 @@ mod tests {
         let moved = ev.perturb(&perm, &mut rng, 8);
         assert!(ev.perm_allowed(&moved));
 
-        let (annealed, _) = anneal(&ev, Some(&perm), 500, 0.35, 0.002, 9);
+        let (annealed, _) = anneal(&ev, Some(&perm), 500, 0.35, 0.002, 9).expect("anneal");
         assert!(ev.perm_allowed(&annealed));
 
         let tables = DeltaTables::build(&ev);
@@ -1000,6 +1068,7 @@ mod tests {
         ev.set_hand_restrictions([Some(0); 26]);
         let mut rng = rand::rngs::StdRng::seed_from_u64(4);
         assert!(ev.constrained_shuffle(&mut rng).is_err());
+        assert!(anneal(&ev, None, 10, 0.35, 0.002, 5).is_err());
     }
 
     #[test]
@@ -1081,6 +1150,14 @@ mod tests {
             assert!((st.score() - before).abs() < 1e-12);
             assert_eq!(st.perm, perm);
         }
+    }
+
+    #[test]
+    fn live_config_tracks_balance_usage() {
+        let (cfg, ev) = setup();
+        let perm = crate::evaluate::perm_of(TEST_LAYOUT, &cfg.punctuation).expect("perm");
+        let st = Local::new(&ev, &perm);
+        assert!(st.usage.is_some());
     }
 
     #[test]
@@ -1249,6 +1326,22 @@ mod tests {
             full.swap(i1, j1);
             full.swap(i2, j2);
             assert!((predicted - ev.score(&full)).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn cached_two_move_penalty_matches_full_usage() {
+        let (cfg, ev) = setup();
+        let perm = crate::evaluate::perm_of(TEST_LAYOUT, &cfg.punctuation).expect("perm");
+        let tables = DeltaTables::build(&ev);
+        let mut st = Local::new(&ev, &perm);
+        for (a, b, c, d) in [(0, 1, 2, 3), (1, 5, 7, 9), (0, 29, 4, 20), (10, 11, 12, 13)] {
+            let u1 = st.usage_delta_swap(a, b);
+            let u2 = st.usage_delta_swap(c, d);
+            let cross = st.usage_cross(a, b, c, d, tables.get_pairs(a, b, c, d));
+            let cached = st.penalty_after_two(&u1, &u2, &cross);
+            let full = st.penalty_after(&[(a, b), (c, d)]);
+            assert!((cached - full).abs() < 1e-12, "{cached} != {full}");
         }
     }
 

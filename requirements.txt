@@ -1,0 +1,5 @@
+# Python development tooling only. The shipped runtime is the Rust binary.
+# Install with: python3 -m pip install -r requirements.txt
+numpy==2.5.4
+scipy==1.18.1
+PyYAML==6.0.3

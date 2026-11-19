@@ -4,7 +4,10 @@
 a config file are resolved from this directory.
 
 - `config.yaml` — shipped flexible-fingering configuration.
-- `config.fixed.yaml` — fixed-fingermap comparison configuration.
+- `config.fixed.yaml` — fixed-fingermap comparison configuration. It mirrors
+  `config.yaml` except for the intentional differences documented in its header
+  (`fingering`, `rest_penalty`, `sfb_impossible`, and empty `alt_fingers`); a
+  drift test keeps the two files in sync.
 - `geometry/` — physical keyboard geometry files. `geometry/ansi.yaml` is the
   shipped ANSI geometry.
 - `model/` — fitted model parameters. `model/calibrated.json` is the live model.
