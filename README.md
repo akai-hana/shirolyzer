@@ -250,14 +250,15 @@ with iterated local search (ILS), and then polishes the near-equal winners.
 Useful flags:
 
 - `--runs` (default `28`), `--iters` (default `200000`), `--ils` (default `8`)
-  — restart count, anneal length, and ILS rounds.
+  — restart count, anneal length, and ILS rounds. `--ils` must be at least 1.
+  `--runs 0` is valid when at least one seed layout or reference is supplied.
 - `--ils-candidates` (default `4`) — how many top layouts advance to ILS.
-  Candidates are chosen by letter placement diversity (at least four displaced
-  letter keys), so layouts that differ only in punctuation are not treated as
-  independent candidates.
-- `--batch-size` (default `8`) — random starts per batch. Batches run in
-  parallel internally and sequentially with each other, which lets the
-  stopping rules below run between batches.
+  Must be at least 1. Candidates are chosen by letter placement diversity (at
+  least four displaced letter keys), so layouts that differ only in punctuation
+  are not treated as independent candidates.
+- `--batch-size` (default `8`) — random starts per batch; must be at least 1.
+  Batches run in parallel internally and sequentially with each other, which
+  lets the stopping rules below run between batches.
 - `--stop-hits` (default `0`, disabled) — stop once the best letter placement
   has been independently reached by this many random starts.
 - `--stop-stale-batches` (default `0`, disabled) — stop once the best primary
@@ -270,6 +271,7 @@ Useful flags:
 - `--valid-tolerance` (default `0.002`), `--secondary-tolerance` (default
   `0.005`), `--min-layout-distance` (default `4`), `--max-valid` (default `8`)
   — how near-equal, diverse layouts are collected into the valid-layout report.
+  `--max-valid` must be at least 1.
 - `--secondary-rounds` (default: same as `--ils`) — perturbation rounds per
   candidate in the secondary phase. `0` only scores the candidates.
 - `--seed` — reproduce a run. Without it a seed is generated and printed in the
@@ -295,6 +297,12 @@ The directory name is slugged for the filesystem, so `--layout "my layout"`
 writes to `layouts/my_layout/`. `--name` is kept as an alias. Without
 `--layout`, output stays at the top level of `layouts/` as before. Generated
 layout directories are ignored by default; see `layouts/README.md`.
+
+Artifacts are written atomically (a temporary file in the destination
+directory, then a rename), so an interrupted run cannot leave a truncated text
+or JSON file behind. `generate.json` and `analysis.json` include
+`schema_version: 1`; the JSON reports from `analyze`, `audit`, `apostrophe`,
+and `words --out-json` use the same schema version.
 
 #### Starting layouts
 
@@ -355,9 +363,12 @@ instead of being fixed:
 
 The footer lists the result files (`layouts/generate_*.{txt,json}`, or
 `layouts/<name>/generate.*` with `--layout`), the `layouts/latest` layout
-pointer, any layouts appended to the references file (named from
-`--layout`/`--name`, or `shiro-<seed>` without one), and the elapsed time.
-Use `--append-references PATH` to write new references somewhere else.
+pointer, any layouts appended to a reference file when `--append-references`
+is used (named from `--layout`/`--name`, or `shiro-<seed>` without one), and
+the elapsed time. Generation does not modify any reference file by default.
+Pass `--append-references PATH` to append new references to `PATH`; a missing
+file is created atomically, and an existing file is validated before the
+search starts so malformed TOML is reported instead of overwritten.
 
 Progress bars are drawn on stderr, and only when it is a terminal. Color is used
 only when stdout is a terminal; set `NO_COLOR=1` to turn it off. Piped or

@@ -287,10 +287,7 @@ pub fn run(args: WorstArgs) -> Result<()> {
         println!("{line}");
     }
     if let Some(path) = args.out {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, lines.join("\n") + "\n")?;
+        paths::write_atomic(path, lines.join("\n") + "\n")?;
         println!("\nwrote {}", path.display());
     }
     Ok(())

@@ -414,11 +414,7 @@ fn append_rows(lines: &mut Vec<String>, title: &str, rows: &[&WordScore], show_f
 }
 
 fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, serde_json::to_string_pretty(value)? + "\n")
-        .with_context(|| format!("failed to write {}", path.display()))
+    paths::write_atomic(path, serde_json::to_string_pretty(value)? + "\n")
 }
 
 fn write_corpus(dir: &Path, entries: &[WordEntry]) -> Result<()> {
@@ -448,8 +444,6 @@ fn write_corpus(dir: &Path, entries: &[WordEntry]) -> Result<()> {
         }
     }
 
-    std::fs::create_dir_all(dir)
-        .with_context(|| format!("failed to create corpus directory {}", dir.display()))?;
     write_json(&dir.join("letter_freq.json"), &letters)?;
     write_json(&dir.join("bigram_freq.json"), &bigrams)?;
     write_json(&dir.join("trigram_freq.json"), &trigrams)?;
@@ -601,10 +595,7 @@ pub fn run(args: WordsArgs) -> Result<()> {
     }
 
     if let Some(path) = args.out {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, lines.join("\n") + "\n")?;
+        paths::write_atomic(path, lines.join("\n") + "\n")?;
         println!("\nwrote {}", path.display());
     }
 
@@ -630,6 +621,7 @@ pub fn run(args: WordsArgs) -> Result<()> {
                 .collect::<Vec<_>>()
         };
         let payload = json!({
+            "schema_version": crate::JSON_SCHEMA_VERSION,
             "layout": layout,
             "wordlist": args.wordlist.display().to_string(),
             "words": entries.len(),

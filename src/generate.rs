@@ -829,6 +829,23 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     if let Some(budget) = args.time_budget {
         validate_time_budget(budget)?;
     }
+    for (flag, value) in [
+        ("--ils", args.ils),
+        ("--ils-candidates", args.ils_candidates),
+        ("--batch-size", args.batch_size),
+        ("--max-valid", args.max_valid),
+    ] {
+        if value == 0 {
+            anyhow::bail!("{flag} must be at least 1");
+        }
+    }
+    let refs_path = args
+        .references
+        .clone()
+        .unwrap_or_else(paths::references_file);
+    let append_path = args.append_references.clone();
+    let naming_path = append_path.as_deref().unwrap_or(&refs_path);
+    let existing_refs = references::load_references_if_present(naming_path)?;
     let ctx = Context::load(args.config)?;
     let timestamp = paths::timestamp();
     let layout_name = args.layout.clone();
@@ -930,10 +947,6 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         None => None,
     };
 
-    let refs_path = args
-        .references
-        .clone()
-        .unwrap_or_else(paths::references_file);
     let mut seeds: Vec<(String, Vec<usize>)> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     // Reference layouts are NOT used as starting points unless explicitly
@@ -1739,21 +1752,15 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     let latest_path = paths::write_latest_layout(&final_row.layout, &timestamp)?;
 
     if let Some(name) = layout_name.as_deref() {
-        paths::ensure_parent(&paths::layout_file(name))?;
-        std::fs::write(paths::layout_file(name), format!("{}\n", final_row.layout))?;
+        paths::write_atomic(&paths::layout_file(name), format!("{}\n", final_row.layout))?;
         let dest = paths::layout_config_backup(name);
         let src = &ctx.cfg.path;
         let same = std::fs::canonicalize(src).ok() == std::fs::canonicalize(&dest).ok();
         if !same {
-            std::fs::copy(src, &dest)?;
+            paths::copy_atomic(src, &dest)?;
         }
     }
 
-    let append_path = args
-        .append_references
-        .clone()
-        .unwrap_or_else(|| refs_path.clone());
-    let existing_refs = references::load_references(Some(&append_path)).unwrap_or_default();
     let mut existing_names: std::collections::HashMap<String, String> = existing_refs
         .iter()
         .map(|r| (r.layout.clone(), r.name.clone()))
@@ -1764,22 +1771,24 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         .unwrap_or_else(|| format!("shiro-{}", seed));
     let mut added_names = Vec::new();
     for (i, row) in valid_rows.iter_mut().enumerate() {
-        let requested = if i == 0 {
-            base_name.clone()
-        } else {
-            format!("{}-{}", base_name, i + 1)
-        };
-        if let Some(added) = references::append_reference(
-            &requested,
-            &row.layout,
-            Some(row.primary),
-            row.secondary,
-            references::score_config_for(&ctx.cfg),
-            Some(seed as i64),
-            Some(&append_path),
-        )? {
-            existing_names.insert(row.layout.clone(), added.clone());
-            added_names.push(added.clone());
+        if let Some(path) = append_path.as_deref() {
+            let requested = if i == 0 {
+                base_name.clone()
+            } else {
+                format!("{}-{}", base_name, i + 1)
+            };
+            if let Some(added) = references::append_reference(
+                &requested,
+                &row.layout,
+                Some(row.primary),
+                row.secondary,
+                references::score_config_for(&ctx.cfg),
+                Some(seed as i64),
+                Some(path),
+            )? {
+                existing_names.insert(row.layout.clone(), added.clone());
+                added_names.push(added);
+            }
         }
         row.reference_name = existing_names.get(&row.layout).cloned();
     }
@@ -1821,7 +1830,13 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             secondary_paths.join(",")
         ),
         format!("references={}", refs_path.display()),
-        format!("append_references={}", append_path.display()),
+        format!(
+            "append_references={}",
+            append_path
+                .as_deref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "none".to_string())
+        ),
         format!("reference_added={}", added_name.clone().unwrap_or_default()),
         format!("references_added={}", added_names.join(",")),
         format!(
@@ -1882,14 +1897,9 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             r.layout
         ));
     }
-    if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&out_path, out_lines.join("\n") + "\n")?;
-    if let Some(parent) = out_json.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    paths::write_atomic(&out_path, out_lines.join("\n") + "\n")?;
     let payload = json!({
+        "schema_version": crate::JSON_SCHEMA_VERSION,
         "seed": seed,
         "seed_generated": seed_generated,
         "primary_corpora": primary_paths,
@@ -1948,7 +1958,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
         "append_references": append_path,
         "xkb": xkb_path,
     });
-    std::fs::write(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
+    paths::write_atomic(&out_json, serde_json::to_string_pretty(&payload)? + "\n")?;
     print_summary(
         &ui,
         &final_row,
@@ -1982,7 +1992,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             selection_status,
             xkb_path.as_deref(),
         );
-        std::fs::write(paths::layout_readme(name), readme)?;
+        paths::write_atomic(&paths::layout_readme(name), readme)?;
     }
 
     let rel = |p: &Path| -> String {
@@ -2003,13 +2013,15 @@ pub fn run(args: GenerateArgs) -> Result<()> {
     println!();
     println!("{} {}", label("saved"), saved);
     println!("{} {}", label("latest"), rel(&latest_path));
-    if !added_names.is_empty() {
-        println!(
-            "{} +{} → {}",
-            label("refs"),
-            added_names.join(", +"),
-            rel(&append_path)
-        );
+    if let Some(path) = append_path.as_deref() {
+        if !added_names.is_empty() {
+            println!(
+                "{} +{} → {}",
+                label("refs"),
+                added_names.join(", +"),
+                rel(path)
+            );
+        }
     }
     if let Some(path) = xkb_path.as_ref() {
         println!("{} {}", label("xkb"), rel(path));
