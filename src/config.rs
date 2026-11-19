@@ -962,6 +962,23 @@ fn parse_conditions(path: &Path, value: Option<&Value>) -> Result<Vec<Condition>
                 "expected scissors, spread, separation, or crossing",
             ));
         }
+        let allowed: &[&str] = match kind.as_str() {
+            "scissors" => &["type", "allow", "distance", "reverse", "fingers", "pairs"],
+            "spread" => &["type", "allow", "max_extra", "fingers", "pairs"],
+            "separation" => &["type", "allow", "min_width", "fingers", "pairs"],
+            "crossing" => &["type", "allow", "deficit", "fingers", "pairs"],
+            _ => unreachable!(),
+        };
+        for key in map.keys() {
+            let name = key.as_str().unwrap_or("?");
+            if !allowed.contains(&name) {
+                return Err(fail(
+                    path,
+                    &where_i,
+                    &format!("unknown field {name:?}; expected one of {allowed:?}"),
+                ));
+            }
+        }
         let allow = as_bool(
             path,
             &format!("{}.allow", where_i),
@@ -969,11 +986,22 @@ fn parse_conditions(path: &Path, value: Option<&Value>) -> Result<Vec<Condition>
         )?;
         let mut distance = None;
         let mut reverse = false;
-        let mut fingers = None;
-        let mut pairs = None;
         let mut max_extra = 2.0;
         let mut min_width = 1.9;
         let mut deficit = 0.30;
+        let fingers = finger_set(path, &format!("{}.fingers", where_i), get(map, "fingers"))?;
+        let pairs = parse_finger_pairs(path, &format!("{}.pairs", where_i), get(map, "pairs"))?;
+        if let Some(pairs) = &pairs {
+            for (j, [first, second]) in pairs.iter().enumerate() {
+                if first.0 != second.0 {
+                    return Err(fail(
+                        path,
+                        &format!("{}.pairs[{}]", where_i, j),
+                        "cross-hand pairs are not supported; condition rules apply to same-hand pairs",
+                    ));
+                }
+            }
+        }
         if kind == "scissors" {
             let dist = as_string(
                 path,
@@ -991,8 +1019,6 @@ fn parse_conditions(path: &Path, value: Option<&Value>) -> Result<Vec<Condition>
             if let Some(v) = get(map, "reverse") {
                 reverse = as_bool(path, &format!("{}.reverse", where_i), v)?;
             }
-            fingers = finger_set(path, &format!("{}.fingers", where_i), get(map, "fingers"))?;
-            pairs = parse_finger_pairs(path, &format!("{}.pairs", where_i), get(map, "pairs"))?;
         } else if kind == "spread" {
             if let Some(v) = get(map, "max_extra") {
                 max_extra = as_number(path, &format!("{}.max_extra", where_i), v, Some(0.0), None)?;
@@ -1001,7 +1027,6 @@ fn parse_conditions(path: &Path, value: Option<&Value>) -> Result<Vec<Condition>
             if let Some(v) = get(map, "min_width") {
                 min_width = as_number(path, &format!("{}.min_width", where_i), v, Some(0.0), None)?;
             }
-            fingers = finger_set(path, &format!("{}.fingers", where_i), get(map, "fingers"))?;
         } else if let Some(v) = get(map, "deficit") {
             deficit = as_number(path, &format!("{}.deficit", where_i), v, Some(0.0), None)?;
         }
@@ -2094,6 +2119,50 @@ mod tests {
         }
         let bad = Value::String("contextual".into());
         assert!(parse_fingering(path, Some(&bad)).is_err());
+    }
+
+    fn conditions(yaml: &str) -> Result<Vec<Condition>> {
+        let value: Value = serde_yaml::from_str(yaml).unwrap();
+        parse_conditions(Path::new("config.yaml"), Some(&value))
+    }
+
+    #[test]
+    fn condition_parser_accepts_filters_on_all_kinds() {
+        let parsed = conditions(
+            "- {type: scissors, distance: half, pairs: [[LR, LP]], allow: false}\n\
+             - {type: spread, max_extra: 1.0, fingers: [LI], allow: false}\n\
+             - {type: separation, min_width: 1.0, fingers: [LP, LI], allow: false}\n\
+             - {type: crossing, deficit: 0.2, pairs: [[LI, LM]], allow: false}\n",
+        )
+        .unwrap();
+        assert_eq!(parsed.len(), 4);
+        assert_eq!(parsed[1].fingers.as_ref().unwrap().len(), 1);
+        assert_eq!(parsed[2].fingers.as_ref().unwrap().len(), 2);
+        assert_eq!(parsed[3].pairs.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn condition_parser_rejects_cross_hand_pairs() {
+        for yaml in [
+            "- {type: scissors, distance: half, pairs: [[LI, RI]], allow: false}\n",
+            "- {type: spread, max_extra: 1.0, pairs: [[LP, RP]], allow: false}\n",
+            "- {type: separation, min_width: 1.0, pairs: [[LI, RI]], allow: false}\n",
+            "- {type: crossing, deficit: 0.2, pairs: [[LP, RP]], allow: false}\n",
+        ] {
+            let err = conditions(yaml).unwrap_err().to_string();
+            assert!(err.contains("cross-hand"), "{yaml}: {err}");
+        }
+    }
+
+    #[test]
+    fn condition_parser_rejects_unknown_fields() {
+        for yaml in [
+            "- {type: spread, max_extra: 1.0, distance: half, allow: false}\n",
+            "- {type: separation, min_width: 1.0, reverse: true, allow: false}\n",
+            "- {type: crossing, deficit: 0.2, min_width: 1.0, allow: false}\n",
+        ] {
+            assert!(conditions(yaml).is_err(), "{yaml} should fail");
+        }
     }
 }
 

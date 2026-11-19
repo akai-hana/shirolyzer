@@ -638,6 +638,8 @@ Condition rules are evaluated from top to bottom; the first matching rule wins. 
 
 `fingers` matches when either endpoint is in the listed set. Use `pairs` when the rule must match both endpoints exactly, for example `pairs: [[LR, LP], [RR, RP]]` for ring/pinky pairs in either direction. Pair entries must use explicit hand/finger tokens.
 
+All condition rules apply to same-hand key pairs. Cross-hand pairs are always allowed by this engine, so `pairs` must name two fingers on the same hand; cross-hand pairs are rejected at config load. A `fingers` set may list tokens from both hands because it matches either endpoint of a same-hand pair. Unsupported fields for a condition type are rejected instead of being silently ignored.
+
 The shipped condition list is a built-in default and stays disabled because the fitted model already implements those native rules. Editing the list enables the conditions engine for the edited list; the built-in defaults are kept in `src/config.rs` (and `utils/config.py`) so a config that still matches them stays disabled.
 
 ## Analysis
