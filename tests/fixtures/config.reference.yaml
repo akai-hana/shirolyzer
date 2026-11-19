@@ -13,13 +13,14 @@
 # hand.  Cross-hand fingering is opt-in through `alt_fingers` below.
 # Physical key order is defined by the geometry file.
 
-# Search effort defaults live in src/generate.rs: 28 random runs, 100000
-# anneal iterations, and 8 ILS rounds.  They were calibrated in
+# Search effort defaults live on the CLI in src/main.rs: 28 random runs,
+# 200000 anneal iterations, and 8 ILS rounds.  They were calibrated in
 # development; override per run with --runs/--iters/--ils.
 # --time-budget stays optional because short budgets truncate seeds and ILS.
-# Diversity output also lives in src/generate.rs: 0.002 primary tolerance,
+# Diversity defaults also live in src/main.rs: 0.002 primary tolerance,
 # 0.005 secondary tolerance, 4 key positions minimum distance, 8 valid layouts.
-# --polish-rounds is opt-in because it continues optimizing near-equal picks.
+# --polish-rounds defaults to unlimited and stops when a round finds no
+# improvement; pass a number to cap it, or 0 to disable polishing.
 general:
   geometry: geometry/ansi.yaml
   # Fingering mode: "flexible" lets the model choose any reachable finger for

@@ -29,11 +29,15 @@ or that the parsed data was already unchanged.
 
 ## Totals
 
+Generated from the bundled `parsed/*.json` files:
+
 ```text
 Letters:  418,381,828
 Bigrams:  327,253,737
 Trigrams: 240,524,895
-Runs:      91,128,091
 ```
+
+The parser also counts 91,128,091 raw `[a-z]+` runs while scanning; run counts
+are not stored in the parsed JSON.
 
 Processing: lowercase, maximal `[a-z]+` runs; non-letters break runs.
