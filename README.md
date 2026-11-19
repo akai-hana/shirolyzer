@@ -840,6 +840,18 @@ the suite. Only change the fixture, and regenerate the baselines
 (`target/release/shirolyzer check-baseline --write`), when you deliberately
 change what the reference model measures.
 
+### Performance checks
+
+`just bench` runs the scoring and search benchmark. `just bench-check` sets
+`SHIROLYZER_BENCH_ASSERT=1`, which applies generous regression ceilings to the
+table build, full score, delta swap, quench, full-score quench, anneal, and ILS
+round timings. The ceilings are intentionally loose so they catch order-of-
+magnitude regressions without failing on normal machine variance. Record the
+printed timings with any performance change; the current release reference is
+roughly a 0.1 s table build, 70 ms delta-table build, 75 us full score, 13 us
+delta swap, 0.9 s quench, 6.6 s full-score quench, and 36k anneal iterations
+per second on the development machine.
+
 ---
 
 <div align="center">
