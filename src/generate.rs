@@ -254,26 +254,26 @@ fn optimize_seed(
     start: &[usize],
     iters: usize,
     anneal_seed: u64,
-) -> Row {
+) -> Result<Row> {
     let mut perm = start.to_vec();
     let cs = ev.score(&perm);
     let (p, _s) = search::quench(ev, delta_tables, &perm, cs, rng);
     perm = p;
-    let (p, s) = search::anneal(ev, Some(&perm), iters, 0.35, 0.002, anneal_seed);
+    let (p, s) = search::anneal(ev, Some(&perm), iters, 0.35, 0.002, anneal_seed)?;
     perm = p;
     let (p, s) = search::quench(ev, delta_tables, &perm, s, rng);
     perm = p;
     canonical_punctuation(&mut perm);
     let layout = ev.layout_str(&perm);
     let primary = ev.score(&perm);
-    Row {
+    Ok(Row {
         start: name.to_string(),
         final_score: s,
         primary,
         secondary: None,
         layout,
         reference_name: None,
-    }
+    })
 }
 
 struct IlsOutcome {
@@ -320,7 +320,7 @@ fn optimize_ils_row(
             0.35,
             0.002,
             anneal_base.wrapping_add(it as u64),
-        );
+        )?;
         let (cand, cs) = search::quench(ev, delta_tables, &cand, cs, rng);
         rounds += 1;
         iterations += round_iters;
@@ -400,7 +400,7 @@ fn optimize_polish_row(
                 .wrapping_add(17 * round_idx as u64)
                 .wrapping_add(index as u64)
                 .wrapping_add(1),
-        );
+        )?;
         cand = p;
         let (cand, cs) = search::quench(ev, delta_tables, &cand, cs, rng);
         passes += 1;
@@ -779,7 +779,7 @@ fn run_seed_batch(
     time_budget: Option<f64>,
     started: Instant,
     progress: &ui::Progress,
-) -> Vec<Row> {
+) -> Result<Vec<Row>> {
     let parallel = time_budget.is_none() && seeds.len() > 1;
     if parallel {
         seeds
@@ -796,9 +796,9 @@ fn run_seed_batch(
                     start,
                     iters,
                     seed_anneal(seed, index),
-                );
+                )?;
                 progress.tick();
-                row
+                Ok(row)
             })
             .collect()
     } else {
@@ -818,10 +818,10 @@ fn run_seed_batch(
                 start,
                 iters,
                 seed_anneal(seed, index),
-            ));
+            )?);
             progress.tick();
         }
-        rows
+        Ok(rows)
     }
 }
 
@@ -1076,7 +1076,7 @@ pub fn run(args: GenerateArgs) -> Result<()> {
             args.time_budget,
             started,
             &anneal_progress,
-        );
+        )?;
         let got = rows.len();
         index_offset += got;
         completed_batches += 1;

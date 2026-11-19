@@ -120,13 +120,25 @@ impl ApostropheTerm {
     /// Put the punctuation items on their cheapest slots.  Letters are not
     /// moved.  Returns the raw apostrophe cost of the chosen placement.
     pub fn optimize_punctuation(&self, perm: &mut [usize], tables: &Tables) -> f64 {
-        let options = self.punctuation_options(perm, tables);
-        let (best, cost) = options
-            .into_iter()
-            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-            .expect("punctuation options are never empty");
-        perm.copy_from_slice(&best);
-        cost
+        let mut slots: Vec<usize> = perm[N_LETTERS..].to_vec();
+        slots.sort_unstable();
+        let mut items: Vec<usize> = (N_LETTERS..N_ITEMS).collect();
+        let mut best_cost = f64::INFINITY;
+        let mut best = [0usize; N_ITEMS - N_LETTERS];
+        permute(&mut items, 0, &mut |assignment| {
+            for (i, &item) in assignment.iter().enumerate() {
+                perm[item] = slots[i];
+            }
+            let cost = self.raw_cost(perm, tables);
+            if cost < best_cost {
+                best_cost = cost;
+                best.copy_from_slice(assignment);
+            }
+        });
+        for (i, &item) in best.iter().enumerate() {
+            perm[item] = slots[i];
+        }
+        best_cost
     }
 
     pub fn apostrophe_key(&self, perm: &[usize]) -> &'static str {
@@ -198,12 +210,13 @@ pub fn search_swaps(
     let base_primary = ev.score(base_perm);
     let base_cost = term.raw_cost(base_perm, tables);
     let mut out = Vec::new();
+    let mut candidate = base_perm.to_vec();
     for a in 0..N_LETTERS {
         for b in (a + 1)..N_LETTERS {
             if !ev.swap_allowed(base_perm, a, b) {
                 continue;
             }
-            let mut candidate = base_perm.to_vec();
+            candidate.copy_from_slice(base_perm);
             candidate.swap(a, b);
             let primary = ev.score(&candidate);
             if primary > base_primary + tolerance {
@@ -232,7 +245,7 @@ pub fn search_swaps(
             if !ev.swap_allowed(base_perm, a, apostrophe) {
                 continue;
             }
-            let mut candidate = base_perm.to_vec();
+            candidate.copy_from_slice(base_perm);
             candidate.swap(a, apostrophe);
             let primary = ev.score(&candidate);
             if primary > base_primary + tolerance {
@@ -292,6 +305,7 @@ pub fn greedy_refine(
     let mut current_primary = base_primary;
     let mut current_cost = term.raw_cost(&current, tables);
     let mut swaps = Vec::new();
+    let mut candidate = current.clone();
     for _ in 0..max_steps {
         let mut best: Option<(usize, usize, f64, f64, Vec<usize>)> = None;
         for a in 0..N_LETTERS {
@@ -299,7 +313,7 @@ pub fn greedy_refine(
                 if !ev.swap_allowed(&current, a, b) {
                     continue;
                 }
-                let mut candidate = current.clone();
+                candidate.copy_from_slice(&current);
                 candidate.swap(a, b);
                 let primary = ev.score(&candidate);
                 if primary > base_primary + tolerance {
@@ -311,7 +325,7 @@ pub fn greedy_refine(
                         .as_ref()
                         .is_none_or(|(_, _, _, best_cost, _)| cost < *best_cost)
                 {
-                    best = Some((a, b, primary, cost, candidate));
+                    best = Some((a, b, primary, cost, candidate.clone()));
                 }
             }
         }
