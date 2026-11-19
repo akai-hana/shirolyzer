@@ -46,6 +46,19 @@ impl Corpus {
         bigrams: HashMap<(char, char), f64>,
         trigrams: HashMap<(char, char, char), f64>,
     ) -> Self {
+        let letters: HashMap<char, f64> = letters
+            .into_iter()
+            .filter(|(ch, _)| ch.is_ascii_lowercase())
+            .collect();
+        let bigrams: HashMap<(char, char), f64> = bigrams
+            .into_iter()
+            .filter(|((a, b), _)| cid(*a).is_some() && cid(*b).is_some())
+            .collect();
+        let trigrams: HashMap<(char, char, char), f64> = trigrams
+            .into_iter()
+            .filter(|((a, b, c), _)| cid(*a).is_some() && cid(*b).is_some() && cid(*c).is_some())
+            .collect();
+
         let mut letter_keys: Vec<char> = letters.keys().copied().collect();
         letter_keys.sort_unstable();
         let total_letters = letter_keys.iter().map(|k| letters[k]).sum();
@@ -55,16 +68,16 @@ impl Corpus {
         let mut trigram_keys: Vec<(char, char, char)> = trigrams.keys().copied().collect();
         trigram_keys.sort_unstable();
         let total_trigrams = trigram_keys.iter().map(|k| trigrams[k]).sum();
-        let mut bi_ids = Vec::new();
-        let mut bi_counts = Vec::new();
+        let mut bi_ids = Vec::with_capacity(bigram_keys.len());
+        let mut bi_counts = Vec::with_capacity(bigram_keys.len());
         for &(a, b) in &bigram_keys {
             if let (Some(ai), Some(bi)) = (cid(a), cid(b)) {
                 bi_ids.push([ai, bi]);
                 bi_counts.push(bigrams[&(a, b)]);
             }
         }
-        let mut tri_ids = Vec::new();
-        let mut tri_counts = Vec::new();
+        let mut tri_ids = Vec::with_capacity(trigram_keys.len());
+        let mut tri_counts = Vec::with_capacity(trigram_keys.len());
         for &(a, b, c) in &trigram_keys {
             if let (Some(ai), Some(bi), Some(ci)) = (cid(a), cid(b), cid(c)) {
                 tri_ids.push([ai, bi, ci]);
@@ -85,18 +98,51 @@ impl Corpus {
         }
     }
 
-    pub fn scaled(&self, factor: f64) -> Self {
-        if factor == 1.0 {
-            return self.clone();
-        }
+    /// Normalize each n-gram order to a unit total. The score is a ratio, so
+    /// this does not change a single corpus's score; it makes configured
+    /// weights act as mixture shares instead of raw-count multipliers.
+    pub fn normalized(&self) -> Self {
         Self::new(
+            normalize_map(&self.letters),
+            normalize_map(&self.bigrams),
+            normalize_map(&self.trigrams),
+        )
+    }
+
+    pub fn scaled(&self, factor: f64) -> Result<Self> {
+        if !factor.is_finite() || factor < 0.0 {
+            return Err(anyhow!(
+                "corpus scale factor must be finite and non-negative, got {factor}"
+            ));
+        }
+        if factor == 1.0 {
+            return Ok(self.clone());
+        }
+        let corpus = Self::new(
             self.letters.iter().map(|(k, v)| (*k, v * factor)).collect(),
             self.bigrams.iter().map(|(k, v)| (*k, v * factor)).collect(),
             self.trigrams
                 .iter()
                 .map(|(k, v)| (*k, v * factor))
                 .collect(),
-        )
+        );
+        corpus.validate_totals()?;
+        Ok(corpus)
+    }
+
+    fn validate_totals(&self) -> Result<()> {
+        for (name, total) in [
+            ("letter", self.total_letters),
+            ("bigram", self.total_bigrams),
+            ("trigram", self.total_trigrams),
+        ] {
+            if !total.is_finite() || total < 0.0 {
+                return Err(anyhow!(
+                    "corpus {name} total must be finite and non-negative, got {total}"
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn merge(corpora: &[Corpus]) -> Result<Self> {
@@ -127,7 +173,9 @@ impl Corpus {
                 *trigrams.entry(k).or_insert(0.0) += corpus.trigrams[&k];
             }
         }
-        Ok(Self::new(letters, bigrams, trigrams))
+        let merged = Self::new(letters, bigrams, trigrams);
+        merged.validate_totals()?;
+        Ok(merged)
     }
 
     pub fn load(path: &Path) -> Result<Self> {
@@ -159,11 +207,21 @@ impl Corpus {
                 )
             },
         );
-        Ok(Self::from_raw_maps(
-            letters_raw?,
-            bigrams_raw?,
-            trigrams_raw?,
-        ))
+        let corpus = Self::from_raw_maps(letters_raw?, bigrams_raw?, trigrams_raw?)
+            .with_context(|| format!("invalid corpus counts in {}", dir.display()))?;
+        if corpus.total_letters == 0.0 {
+            return Err(anyhow!(
+                "parsed corpus {} has no supported letter counts",
+                dir.display()
+            ));
+        }
+        if corpus.total_bigrams == 0.0 && corpus.total_trigrams > 0.0 {
+            return Err(anyhow!(
+                "parsed corpus {} has trigrams but no bigram counts",
+                dir.display()
+            ));
+        }
+        Ok(corpus)
     }
 
     /// Load an external comparison bundle: a JSON object with `letters`,
@@ -177,39 +235,47 @@ impl Corpus {
         }
         let payload: ExternalCorpus = read_json(path)
             .with_context(|| format!("expected letters/bigrams/trigrams in {}", path.display()))?;
-        Ok(Self::from_raw_maps(
-            payload.letters,
-            payload.bigrams,
-            payload.trigrams,
-        ))
+        Self::from_raw_maps(payload.letters, payload.bigrams, payload.trigrams)
+            .with_context(|| format!("invalid counts in {}", path.display()))
     }
 
     fn from_raw_maps(
         letters_raw: HashMap<String, f64>,
         bigrams_raw: HashMap<String, f64>,
         trigrams_raw: HashMap<String, f64>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut letters = HashMap::new();
         for (k, v) in letters_raw {
-            if let Some(ch) = single_char(&k) {
-                letters.insert(ch, v);
+            let Some(ch) = single_char(&k) else {
+                continue;
+            };
+            if !ch.is_ascii_lowercase() {
+                continue;
             }
+            validate_count("letter", &k, v)?;
+            letters.insert(ch, v);
         }
         let mut bigrams = HashMap::new();
         for (k, v) in bigrams_raw {
             let chars: Vec<char> = k.chars().collect();
-            if chars.len() == 2 {
-                bigrams.insert((chars[0], chars[1]), v);
+            if chars.len() != 2 || chars.iter().any(|ch| cid(*ch).is_none()) {
+                continue;
             }
+            validate_count("bigram", &k, v)?;
+            bigrams.insert((chars[0], chars[1]), v);
         }
         let mut trigrams = HashMap::new();
         for (k, v) in trigrams_raw {
             let chars: Vec<char> = k.chars().collect();
-            if chars.len() == 3 {
-                trigrams.insert((chars[0], chars[1], chars[2]), v);
+            if chars.len() != 3 || chars.iter().any(|ch| cid(*ch).is_none()) {
+                continue;
             }
+            validate_count("trigram", &k, v)?;
+            trigrams.insert((chars[0], chars[1], chars[2]), v);
         }
-        Self::new(letters, bigrams, trigrams)
+        let corpus = Self::new(letters, bigrams, trigrams);
+        corpus.validate_totals()?;
+        Ok(corpus)
     }
 
     fn count_text(text: &str) -> Self {
@@ -250,6 +316,27 @@ fn single_char(s: &str) -> Option<char> {
         None
     } else {
         Some(ch)
+    }
+}
+
+fn validate_count(kind: &str, key: &str, value: f64) -> Result<()> {
+    if !value.is_finite() || value < 0.0 {
+        return Err(anyhow!(
+            "invalid {kind} count for {key:?}: expected a finite non-negative number, got {value}"
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_map<K>(map: &HashMap<K, f64>) -> HashMap<K, f64>
+where
+    K: Eq + std::hash::Hash + Copy,
+{
+    let total: f64 = map.values().sum();
+    if total > 0.0 {
+        map.iter().map(|(k, v)| (*k, *v / total)).collect()
+    } else {
+        HashMap::new()
     }
 }
 
@@ -622,5 +709,138 @@ mod tests {
         assert_eq!(writer.write(b"four").unwrap(), 4);
         assert!(writer.write(b"more").is_err());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn trigram_corpus(ngram: (char, char, char), count: f64) -> Corpus {
+        Corpus::new(
+            HashMap::from([('a', 1.0), ('b', 1.0), ('c', 1.0)]),
+            HashMap::new(),
+            HashMap::from([(ngram, count)]),
+        )
+    }
+
+    #[test]
+    fn recomputes_totals_after_filtering_unsupported_keys() {
+        let corpus = Corpus::new(
+            HashMap::from([('a', 2.0), ('!', 100.0)]),
+            HashMap::from([(('a', 'b'), 3.0), (('a', '!'), 100.0)]),
+            HashMap::from([(('a', 'b', 'c'), 4.0), (('a', '!', 'b'), 100.0)]),
+        );
+        assert_eq!(corpus.total_letters, 2.0);
+        assert_eq!(corpus.total_bigrams, 3.0);
+        assert_eq!(corpus.total_trigrams, 4.0);
+        assert_eq!(corpus.bi_ids.len(), 1);
+        assert_eq!(corpus.tri_ids.len(), 1);
+        assert!(!corpus.letters.contains_key(&'!'));
+        assert!(!corpus.bigrams.contains_key(&('a', '!')));
+        assert!(!corpus.trigrams.contains_key(&('a', '!', 'b')));
+    }
+
+    #[test]
+    fn rejects_invalid_parsed_counts() {
+        let mut letters = HashMap::new();
+        letters.insert("a".to_string(), f64::NAN);
+        let err = Corpus::from_raw_maps(letters, HashMap::new(), HashMap::new())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("letter"), "{err}");
+        assert!(err.contains("finite non-negative"), "{err}");
+
+        let mut bigrams = HashMap::new();
+        bigrams.insert("ab".to_string(), -1.0);
+        let err = Corpus::from_raw_maps(HashMap::new(), bigrams, HashMap::new())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("bigram"), "{err}");
+        assert!(err.contains("finite non-negative"), "{err}");
+
+        let mut trigrams = HashMap::new();
+        trigrams.insert("abc".to_string(), f64::INFINITY);
+        let err = Corpus::from_raw_maps(HashMap::new(), HashMap::new(), trigrams)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("trigram"), "{err}");
+        assert!(err.contains("finite non-negative"), "{err}");
+    }
+
+    #[test]
+    fn parsed_loader_filters_invalid_keys_and_validates_counts() {
+        let dir = temp_dir("parsed-counts");
+        let parsed = dir.join("parsed");
+        std::fs::create_dir_all(&parsed).unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[0]), r#"{"a": 1.0, "!": 99.0}"#).unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[1]), r#"{"ab": 2.0, "a!": 99.0}"#).unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[2]), r#"{"abc": 3.0, "a!b": 99.0}"#).unwrap();
+
+        let corpus = Corpus::load(&parsed).unwrap();
+        assert_eq!(corpus.total_letters, 1.0);
+        assert_eq!(corpus.total_bigrams, 2.0);
+        assert_eq!(corpus.total_trigrams, 3.0);
+        assert_eq!(corpus.bi_ids.len(), 1);
+        assert_eq!(corpus.tri_ids.len(), 1);
+
+        std::fs::write(parsed.join(PARSED_FILES[2]), r#"{"abc": -1.0}"#).unwrap();
+        let err = format!("{:#}", Corpus::load(&parsed).unwrap_err());
+        assert!(err.contains("invalid corpus counts"), "{err}");
+        assert!(err.contains("trigram"), "{err}");
+        assert!(err.contains("finite non-negative"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn parsed_loader_rejects_missing_lower_order_counts() {
+        let dir = temp_dir("parsed-mismatch");
+        let parsed = dir.join("parsed");
+        std::fs::create_dir_all(&parsed).unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[0]), "{}").unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[1]), "{}").unwrap();
+        std::fs::write(parsed.join(PARSED_FILES[2]), r#"{"abc": 1.0}"#).unwrap();
+        let err = Corpus::load(&parsed).unwrap_err().to_string();
+        assert!(err.contains("no supported letter counts"), "{err}");
+
+        std::fs::write(parsed.join(PARSED_FILES[0]), r#"{"a": 1.0}"#).unwrap();
+        let err = Corpus::load(&parsed).unwrap_err().to_string();
+        assert!(err.contains("trigrams but no bigram counts"), "{err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn raw_text_breaks_runs_at_spaces_and_punctuation() {
+        let dir = temp_dir("raw-tokenization");
+        let path = dir.join("words.txt");
+        std::fs::write(&path, "Ab-cd ef.\n").unwrap();
+        let corpus = Corpus::load(&path).unwrap();
+        assert_eq!(corpus.total_letters, 6.0);
+        assert_eq!(corpus.total_bigrams, 3.0);
+        assert_eq!(corpus.total_trigrams, 0.0);
+        for pair in [('a', 'b'), ('c', 'd'), ('e', 'f')] {
+            assert_eq!(corpus.bigrams.get(&pair), Some(&1.0), "{pair:?}");
+        }
+        assert!(!corpus.bigrams.contains_key(&('b', 'c')));
+        assert!(!corpus.bigrams.contains_key(&('d', 'e')));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn normalized_equal_weights_blend_by_distribution() {
+        let large = trigram_corpus(('a', 'b', 'c'), 100.0);
+        let small = trigram_corpus(('a', 'b', 'd'), 1.0);
+
+        let raw = Corpus::merge(&[large.clone(), small.clone()]).unwrap();
+        assert_eq!(raw.trigrams[&('a', 'b', 'c')], 100.0);
+        assert_eq!(raw.trigrams[&('a', 'b', 'd')], 1.0);
+
+        let normalized = Corpus::merge(&[large.normalized(), small.normalized()]).unwrap();
+        assert!((normalized.trigrams[&('a', 'b', 'c')] - 1.0).abs() < 1e-12);
+        assert!((normalized.trigrams[&('a', 'b', 'd')] - 1.0).abs() < 1e-12);
+        assert!((normalized.total_trigrams - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn scaling_rejects_invalid_factors() {
+        let corpus = trigram_corpus(('a', 'b', 'c'), 1.0);
+        assert!(corpus.scaled(f64::NAN).is_err());
+        assert!(corpus.scaled(-1.0).is_err());
+        assert!((corpus.scaled(2.0).unwrap().total_trigrams - 2.0).abs() < 1e-12);
     }
 }
