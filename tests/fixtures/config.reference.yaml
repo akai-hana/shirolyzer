@@ -31,6 +31,8 @@ general:
   # positions.  analyze uses the most recent generate result when --layout is
   # omitted.
   punctuation: ";,./"
+  # Weights are raw-count multipliers by default.  Add `normalize: true` to
+  # every entry to blend by n-gram distribution instead of corpus size.
   primary_corpus:
     - {name: shai, weight: 100}
   secondary_corpus:

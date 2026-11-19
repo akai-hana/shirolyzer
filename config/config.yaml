@@ -64,6 +64,8 @@ general:
       - {text: "'ve", weight: 0.20}
       - {text: "'m",  weight: 0.15}
       - {text: "n's", weight: 0.10}
+  # Weights are raw-count multipliers by default.  Add `normalize: true` to
+  # every entry to blend by n-gram distribution instead of corpus size.
   primary_corpus:
     - {name: shai, weight: 100}
   secondary_corpus:

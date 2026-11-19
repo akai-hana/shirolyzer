@@ -443,7 +443,10 @@ fn layout_lines(layout: &str) -> Vec<String> {
 fn corpus_summary(entries: &[crate::config::CorpusEntry]) -> String {
     entries
         .iter()
-        .map(|entry| format!("{} ({})", entry.label(), entry.weight))
+        .map(|entry| {
+            let mode = if entry.normalize { ", normalized" } else { "" };
+            format!("{} ({}{})", entry.label(), entry.weight, mode)
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }
