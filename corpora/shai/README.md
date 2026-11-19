@@ -2,6 +2,11 @@
 
 Source: [AKL (Alt Keyboard Layouts) Discord server](https://discord.gg/kXyGkVaez)
 Direct Download Link: <https://colemak.com/pub/corpus/iweb-corpus-samples-cleaned.txt.xz>
+License: no explicit license is included with the sample. The bundled parsed
+counts are derived data from the community sample; confirm the upstream terms
+before redistributing the raw corpus.
+Attribution: credit Shai and the AKL community, and note the underlying iWeb
+sample when publishing results derived from it.
 
 ## Build
 

@@ -828,6 +828,22 @@ to one JSON file. Search budget flags mirror `generate` (`--runs`, `--iters`,
 
 ## Development
 
+### Toolchain and CI
+
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, Clippy with
+`-D warnings`, the release test suite, and the Python development-tool
+compile/import checks. `rust-toolchain.toml` pins Rust 1.99.1, and
+`requirements.txt` pins the Python tooling dependencies.
+
+Build artifacts stay in Cargo's `target/` directory for the checkout. If you
+reuse a copied `target/` or work in a shared tree with different file
+ownership, point Cargo at a fresh directory to rule out stale-artifact
+failures:
+
+```sh
+CARGO_TARGET_DIR=/tmp/shirolyzer-target cargo test --release
+```
+
 ### Tests and the reference model
 
 `just check` runs the tests, the Python development-tool import check,
@@ -854,6 +870,12 @@ printed timings with any performance change; the current release reference is
 roughly a 0.1 s table build, 70 ms delta-table build, 75 us full score, 13 us
 delta swap, 0.9 s quench, 6.6 s full-score quench, and 36k anneal iterations
 per second on the development machine.
+
+### License
+
+The Rust runtime, development tooling, and shipped configuration are MIT
+licensed; see [LICENSE](LICENSE). Bundled corpora have their own provenance and
+licensing terms documented in [corpora/README.md](corpora/README.md).
 
 ---
 
